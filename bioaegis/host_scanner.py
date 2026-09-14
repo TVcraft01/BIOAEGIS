@@ -67,10 +67,10 @@ class HostScanner:
             stat = path.stat()
             with path.open("rb") as handle:
                 sample = handle.read(self.max_bytes)
+            sha256 = self._hash_file(path)
         except (OSError, PermissionError):
             return None
 
-        sha256 = hashlib.sha256(sample).hexdigest()
         behaviors: set[str] = set()
         evidence: list[str] = []
         score = 0
@@ -97,6 +97,14 @@ class HostScanner:
         if not behaviors or score == 0:
             return None
         return HostFinding(path, sha256, frozenset(behaviors), score, tuple(evidence), clamav)
+
+    @staticmethod
+    def _hash_file(path: Path) -> str:
+        digest = hashlib.sha256()
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
 
     def _clamav(self, path: Path) -> str | None:
         if not self.clamscan:
