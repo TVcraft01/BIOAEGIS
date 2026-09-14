@@ -6,7 +6,9 @@ Flow: read-only scan -> known response or disposable specialist -> validator
 
 from __future__ import annotations
 
+import shutil
 from dataclasses import dataclass
+from pathlib import Path
 
 from .general_scanner import GeneralScanner
 from .host_scanner import HostFinding, HostScanner
@@ -34,15 +36,13 @@ class HostEngine:
         self.memory.load()
         self.validator = Validator()
         self.scanner = HostScanner()
-        self.specialist = HostSpecialist()
         self.quarantine = Quarantine()
         self.general = GeneralScanner(self.memory)
 
     def scan(self, target: str, quarantine: bool = False) -> list[HostResult]:
         results: list[HostResult] = []
         for finding in self.scanner.scan(target):
-            result = self._handle_finding(finding, quarantine)
-            results.append(result)
+            results.append(self._handle_finding(finding, quarantine))
         return results
 
     def _handle_finding(self, finding: HostFinding, quarantine: bool) -> HostResult:
@@ -54,9 +54,7 @@ class HostEngine:
             variant="static",
         )
 
-        known = self.general.scan(threat)
-        candidate = self.memory.match(finding.behaviors) if known != "UNKNOWN_THREAT" else None
-
+        candidate = self.memory.match(finding.behaviors)
         if candidate is None:
             specialist = HostSpecialist()
             report = specialist.investigate(finding)
@@ -83,7 +81,7 @@ class HostEngine:
         except (OSError, ValueError, shutil.Error) as exc:
             return HostResult(finding, result, False, None, f"Quarantine failed: {exc}")
 
-        verified = (not finding.path.exists()) and record.quarantine_path
+        verified = (not finding.path.exists()) and Path(record.quarantine_path).is_file()
         if not verified:
             return HostResult(finding, result, False, record, "Quarantine verification failed.")
 
