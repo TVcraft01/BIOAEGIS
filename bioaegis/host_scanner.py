@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 MAX_ANALYSIS_BYTES = 8 * 1024 * 1024
+CLAMAV_TIMEOUT_SECONDS = 30
 
 SUSPICIOUS_PATTERNS = (
     ("download-and-execute", re.compile(rb"(?:curl|wget)[^\n]{0,300}(?:\||;)[^\n]{0,100}(?:sh|bash)")),
@@ -46,9 +47,15 @@ class HostScanner:
         if not root.exists():
             raise FileNotFoundError(root)
         files = [root] if root.is_file() else self._walk(root)
+
+        # Run ClamAV once for the whole target instead of starting a new
+        # process for every file. This avoids a 30-second timeout per file
+        # on directories containing many files.
+        clamav_hits = self._clamav(root) if self.clamscan else {}
+
         findings: list[HostFinding] = []
         for path in files:
-            finding = self._inspect(path)
+            finding = self._inspect(path, clamav_hits)
             if finding is not None:
                 findings.append(finding)
         return findings
@@ -62,7 +69,7 @@ class HostScanner:
                     continue
                 yield path
 
-    def _inspect(self, path: Path) -> HostFinding | None:
+    def _inspect(self, path: Path, clamav_hits: dict[Path, str]) -> HostFinding | None:
         try:
             stat = path.stat()
             with path.open("rb") as handle:
@@ -88,7 +95,7 @@ class HostScanner:
                 evidence.append(label)
                 score += 2
 
-        clamav = self._clamav(path)
+        clamav = clamav_hits.get(path)
         if clamav:
             behaviors.add("malware_signature")
             evidence.append(f"ClamAV: {clamav}")
@@ -106,19 +113,30 @@ class HostScanner:
                 digest.update(chunk)
         return digest.hexdigest()
 
-    def _clamav(self, path: Path) -> str | None:
+    def _clamav(self, target: Path) -> dict[Path, str]:
+        """Return ClamAV detections keyed by path, using one bounded scan."""
         if not self.clamscan:
-            return None
+            return {}
         try:
             result = subprocess.run(
-                [self.clamscan, "--infected", "--no-summary", "--", str(path)],
+                [self.clamscan, "--infected", "--no-summary", "--recursive", "--", str(target)],
                 capture_output=True,
                 text=True,
-                timeout=30,
+                timeout=CLAMAV_TIMEOUT_SECONDS,
                 check=False,
             )
         except (OSError, subprocess.SubprocessError):
-            return None
-        if result.returncode == 1:
-            return result.stdout.strip() or "ClamAV detected a threat"
-        return None
+            return {}
+
+        if result.returncode != 1:
+            return {}
+
+        hits: dict[Path, str] = {}
+        for line in result.stdout.splitlines():
+            if not line.endswith(" FOUND"):
+                continue
+            path_text, _, threat = line.rpartition(": ")
+            if not path_text or not threat:
+                continue
+            hits[Path(path_text).resolve()] = threat.removesuffix(" FOUND")
+        return hits
