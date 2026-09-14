@@ -41,6 +41,7 @@ say "Installing development/test dependencies"
 cat > "$LAUNCHER" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$INSTALL_DIR"
 exec "$VENV_PYTHON" -m bioaegis "\$@"
 EOF
 chmod +x "$LAUNCHER"
