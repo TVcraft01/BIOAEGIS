@@ -7,6 +7,8 @@ ALLOWED_ACTIONS = frozenset(
         "SIMULATE_QUARANTINE_RESOURCE",
         "SIMULATE_REMOVE_PERSISTENCE",
         "SIMULATE_VERIFY_CLEAN_STATE",
+        "QUARANTINE_FILE",
+        "VERIFY_QUARANTINE",
     }
 )
 
@@ -20,10 +22,16 @@ class Validator:
 
         checks = {
             "candidate_exists": True,
-            "trigger_matches": candidate.trigger == threat.behavior,
+            "trigger_matches": candidate.trigger.issubset(threat.behavior),
             "actions_are_safe": set(candidate.actions).issubset(ALLOWED_ACTIONS),
-            "has_recovery_check": "SIMULATE_VERIFY_CLEAN_STATE" in candidate.actions,
-            "has_quarantine_step": "SIMULATE_QUARANTINE_RESOURCE" in candidate.actions,
+            "has_recovery_check": (
+                "SIMULATE_VERIFY_CLEAN_STATE" in candidate.actions
+                or "VERIFY_QUARANTINE" in candidate.actions
+            ),
+            "has_quarantine_step": (
+                "SIMULATE_QUARANTINE_RESOURCE" in candidate.actions
+                or "QUARANTINE_FILE" in candidate.actions
+            ),
         }
         accepted = all(checks.values())
         reason = "Countermeasure accepted." if accepted else "Countermeasure rejected by validator."
