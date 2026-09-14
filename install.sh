@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+INSTALLER_VERSION="2026-09-14.2"
 REPO_URL="https://github.com/TVcraft01/BIOAEGIS.git"
 INSTALL_DIR="${BIOAEGIS_HOME:-$HOME/.local/share/bioaegis}"
 BIN_DIR="${BIOAEGIS_BIN:-$HOME/.local/bin}"
@@ -14,23 +15,31 @@ command -v python3 >/dev/null 2>&1 || fatal "python3 is required. Install it wit
 
 PYTHON="$(command -v python3)"
 
+say "Installer $INSTALLER_VERSION"
 say "Installing to $INSTALL_DIR"
 mkdir -p "$(dirname "$INSTALL_DIR")" "$BIN_DIR"
 
+# Always obtain a clean checkout in a temporary directory. This avoids stale
+# local files, interrupted installs, and rebase configuration in old checkouts.
+TMP_PARENT="$(mktemp -d "${TMPDIR:-/tmp}/bioaegis-install.XXXXXX")"
+TMP_REPO="$TMP_PARENT/repo"
+cleanup() { rm -rf "$TMP_PARENT"; }
+trap cleanup EXIT
+
+say "Downloading BIOAEGIS from origin/main"
+git clone --quiet --branch main --single-branch "$REPO_URL" "$TMP_REPO"
+
+[ -f "$TMP_REPO/bioaegis/__main__.py" ] || fatal "The downloaded BIOAEGIS package is incomplete."
+[ -f "$TMP_REPO/requirements-dev.txt" ] || fatal "requirements-dev.txt is missing from origin/main."
+
 if [ -d "$INSTALL_DIR/.git" ]; then
-    say "Existing installation found — synchronizing with origin/main"
-    git -C "$INSTALL_DIR" fetch origin main
-    git -C "$INSTALL_DIR" reset --hard origin/main
-else
-    if [ -e "$INSTALL_DIR" ]; then
-        fatal "$INSTALL_DIR exists but is not a BIOAEGIS git checkout. Set BIOAEGIS_HOME to another path."
-    fi
-    say "Cloning BIOAEGIS"
-    git clone --branch main "$REPO_URL" "$INSTALL_DIR"
+    say "Existing installation found — replacing it with the verified checkout"
+    rm -rf "$INSTALL_DIR"
+elif [ -e "$INSTALL_DIR" ]; then
+    fatal "$INSTALL_DIR exists but is not a BIOAEGIS git checkout. Set BIOAEGIS_HOME to another path."
 fi
 
-[ -f "$INSTALL_DIR/bioaegis/__main__.py" ] || fatal "The BIOAEGIS package is incomplete after synchronization."
-[ -f "$INSTALL_DIR/requirements-dev.txt" ] || fatal "requirements-dev.txt is missing after synchronization."
+mv "$TMP_REPO" "$INSTALL_DIR"
 
 if [ ! -d "$INSTALL_DIR/.venv" ]; then
     say "Creating Python virtual environment"
@@ -40,7 +49,7 @@ fi
 VENV_PYTHON="$INSTALL_DIR/.venv/bin/python"
 [ -x "$VENV_PYTHON" ] || fatal "Could not create the Python virtual environment."
 
-say "Installing development/test dependencies"
+say "Installing dependencies"
 "$VENV_PYTHON" -m pip install -r "$INSTALL_DIR/requirements-dev.txt"
 
 say "Verifying BIOAEGIS package"
