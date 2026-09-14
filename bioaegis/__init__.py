@@ -1,3 +1,3 @@
-"""BIOAEGIS: a safe, biological-inspired defensive prototype."""
+"""BIOAEGIS: a biological-inspired defensive system."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
