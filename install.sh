@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-INSTALLER_VERSION="2026-09-14.3"
+INSTALLER_VERSION="2026-09-14.4"
 REPO_URL="https://github.com/TVcraft01/BIOAEGIS.git"
 INSTALL_DIR="${BIOAEGIS_HOME:-$HOME/.local/share/bioaegis}"
 BIN_DIR="${BIOAEGIS_BIN:-$HOME/.local/bin}"
@@ -42,6 +42,8 @@ elif [ -e "$INSTALL_DIR" ]; then
 fi
 
 mv "$TMP_REPO" "$INSTALL_DIR"
+[ -f "$INSTALL_DIR/bioaegis/__init__.py" ] || fatal "BIOAEGIS package was not installed at the expected path."
+[ -f "$INSTALL_DIR/bioaegis/__main__.py" ] || fatal "BIOAEGIS entry point was not installed at the expected path."
 
 say "Creating Python virtual environment"
 rm -rf "$INSTALL_DIR/.venv"
@@ -54,14 +56,12 @@ say "Installing dependencies"
 "$VENV_PYTHON" -m pip install -r "$INSTALL_DIR/requirements-dev.txt"
 
 say "Verifying BIOAEGIS package"
-(
-    cd "$INSTALL_DIR"
-    "$VENV_PYTHON" -c 'import bioaegis; import bioaegis.__main__; print(f"BIOAEGIS {bioaegis.__version__} OK")'
-)
+PYTHONPATH="$INSTALL_DIR" "$VENV_PYTHON" -c 'import bioaegis; import bioaegis.__main__; print(f"BIOAEGIS {bioaegis.__version__} OK")'
 
 cat > "$LAUNCHER" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
+export PYTHONPATH="$INSTALL_DIR\${PYTHONPATH:+:\$PYTHONPATH}"
 cd "$INSTALL_DIR"
 exec "$VENV_PYTHON" -m bioaegis "\$@"
 EOF
