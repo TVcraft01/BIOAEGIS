@@ -39,10 +39,17 @@ Current capabilities include:
 - independent response validator with an allow-list;
 - behavior-based immune memory with specificity-aware matching;
 - fail-closed handling of malformed immune-memory data;
+- deterministic confidence scoring and evidence fusion;
+- deterministic behavior similarity and clustering;
+- local signed-policy/integrity primitives;
+- safe archive/container inspection without extraction or execution;
 - Linux `/proc` process telemetry;
 - common user-level persistence inspection;
 - read-only TCP/UDP listener inventory;
-- polling monitor combining defensive telemetry;
+- polling monitor and Linux inotify near-real-time event source;
+- constrained specialist-provider API;
+- non-executing isolated analysis workspace;
+- hardened user-systemd service template;
 - inert adversarial regression fixtures, including EICAR.
 
 ### What it is not
@@ -62,7 +69,9 @@ BIOAEGIS is **not** a production antivirus or a replacement for mature endpoint 
               │                 │                 │
               └─────────────────┼─────────────────┘
                                 ▼
-                       GENERAL DETECTOR
+                       EVIDENCE FUSION
+                                │
+                         GENERAL DETECTOR
                                 │
                          new / unknown
                                 │
@@ -86,7 +95,7 @@ BIOAEGIS is **not** a production antivirus or a replacement for mature endpoint 
                     IMMUNE MEMORY
                          │
                          ▼
-               FRESH GENERAL SCANNER
+                FRESH GENERAL SCANNER
                          │
                  specialist discarded
 ```
@@ -102,6 +111,8 @@ BIOAEGIS is **not** a production antivirus or a replacement for mature endpoint 
 **Quarantine** — moves files rather than deleting them and verifies SHA-256 before and after restoration.
 
 **Immune memory** — stores validated responses, prefers more-specific behavioral rules, and fails closed when its data is malformed.
+
+**Integrity layer** — provides local HMAC-backed integrity for policy/memory data. This is a research baseline, not a hardware-backed trust root.
 
 ---
 
@@ -131,21 +142,9 @@ Expected current red-team coverage includes **8/8 inert tests**.
 
 ### Scan
 
-Detection only:
-
 ```bash
 bioaegis scan ~/Downloads
-```
-
-Deep analysis:
-
-```bash
 bioaegis scan ~/Downloads --deep
-```
-
-Explicit reversible quarantine:
-
-```bash
 bioaegis scan ~/Downloads --quarantine
 ```
 
@@ -153,23 +152,12 @@ Normal mode focuses analysis on executables, known text/script formats, and unkn
 
 ### Audit
 
-Run a read-only combined audit:
-
 ```bash
 bioaegis audit ~
 bioaegis audit ~ --deep
 ```
 
-The audit combines:
-
-| Layer | Purpose |
-|---|---|
-| File | Static suspicious-content detection |
-| Runtime | Suspicious process command-line indicators |
-| Persistence | Common user startup locations |
-| Network | Listening TCP/UDP sockets |
-
-The audit does not kill processes, modify persistence, close sockets, or probe remote services.
+The audit combines file/static findings, suspicious process command lines, common user persistence locations, and listening TCP/UDP sockets. It does not kill processes, modify persistence, close sockets, or probe remote services.
 
 ### Monitor
 
@@ -191,19 +179,12 @@ Enable reversible quarantine for newly detected file findings:
 bioaegis monitor ~/Downloads --interval 2 --quarantine
 ```
 
-For home-directory monitoring, file scans are throttled while process, persistence, and network telemetry continue each cycle.
+The Linux inotify module provides a near-real-time event source for targeted directories; analysis still flows through the normal read-only scanner.
 
 ### Quarantine recovery
 
-List isolated files:
-
 ```bash
 bioaegis quarantine list
-```
-
-Restore a reviewed file:
-
-```bash
 bioaegis quarantine restore ~/.local/share/bioaegis/quarantine/<file>.quarantined
 ```
 
@@ -214,6 +195,10 @@ Restore checks the quarantine record, verifies the stored SHA-256, refuses to ov
 ## Detection model
 
 BIOAEGIS uses bounded static analysis rather than executing artifacts.
+
+### Evidence fusion
+
+The confidence engine combines independent behavioral signals and external evidence into a deterministic `LOW` / `MEDIUM` / `HIGH` confidence result. Confidence affects prioritization and reporting; it does not bypass the validator's response allow-list.
 
 ### Normal mode
 
@@ -230,19 +215,17 @@ BIOAEGIS uses bounded static analysis rather than executing artifacts.
 - SHA-256 identity;
 - optional recursive ClamAV scan.
 
-### Current behavioral indicators
+### Behavioral indicators
 
-The static engine currently includes detectors for several high-risk shell behaviors, including:
-
-- download-to-shell patterns;
-- download-to-evaluation patterns;
-- base64 decoding indicators;
-- reverse-shell indicators;
-- destructive command indicators;
-- EICAR anti-malware test signature;
-- executable and hidden-executable signals.
+The static engine currently includes detectors for several high-risk shell behaviors, including download-to-shell, download-to-evaluation, base64 decoding, reverse-shell indicators, destructive command indicators, and the EICAR anti-malware test signature.
 
 A heuristic finding is **evidence, not proof of malware**.
+
+---
+
+## Behavior clustering
+
+`bioaegis.behavior` provides deterministic Jaccard similarity and lightweight clustering of behavior sets. This is intentionally simple and explainable: it provides a baseline for grouping variants without introducing a trainable model or opaque inference layer.
 
 ---
 
@@ -254,7 +237,7 @@ Behavioral matching means a response can be reused across variants that exhibit 
 
 Memory matching is specificity-aware: a more specific behavioral trigger takes precedence over a broader earlier rule. Malformed memory is rejected rather than trusted.
 
-The host lifecycle only commits a newly discovered countermeasure after successful quarantine and post-quarantine verification.
+The integrity layer can authenticate policy/memory payloads using a local 256-bit key with restrictive filesystem permissions. Because the key is local, this is integrity detection rather than protection against a fully privileged attacker.
 
 ---
 
@@ -262,37 +245,42 @@ The host lifecycle only commits a newly discovered countermeasure after successf
 
 The current host specialist is deliberately deterministic.
 
-It does **not** accept instructions from the content it analyzes, generate arbitrary shell commands, or execute untrusted data. Its current baseline response is constrained to the validator's explicit allow-list:
+It does **not** accept instructions from the content it analyzes, generate arbitrary shell commands, or execute untrusted data. Its response is constrained to the validator's explicit allow-list:
 
 ```text
 QUARANTINE_FILE
 VERIFY_QUARANTINE
 ```
 
-This creates a narrow security boundary that can later support more sophisticated local analysis without turning the specialist into an unrestricted command-generating agent.
+`bioaegis.specialist_api` provides a narrow provider interface so future local models can be plugged in without giving them direct execution authority. Model-backed specialists remain optional research components rather than trusted security boundaries.
+
+---
+
+## Archive and container analysis
+
+BIOAEGIS now performs bounded inspection of common ZIP/JAR/WHEEL/APK and TAR-family containers without extracting or executing their contents.
+
+It can identify research-relevant conditions such as archive path traversal, dangerous archive links, oversized members, and simple suspicious shell content inside script members.
+
+This is deliberately safer than automatically extracting untrusted archives on the host.
+
+---
+
+## Isolated analysis workspace
+
+`bioaegis.sandbox.AnalysisSandbox` provides a restricted analysis workspace and explicit manifest stating that sample execution and network access are disabled.
+
+This is a **non-executing research sandbox**, not a claim of full malware detonation isolation. Actual executable malware analysis should remain in a separately hardened VM or dedicated sandbox platform.
 
 ---
 
 ## Red-team lab
 
-Run the inert regression lab:
-
 ```bash
 bioaegis redteam
 ```
 
-The suite includes:
-
-| Test | Purpose |
-|---|---|
-| Download → shell | Baseline behavior detection |
-| Base64 decode | Encoded-command indicator |
-| Reverse shell | Network-shell indicator |
-| Destructive command | High-risk filesystem indicator |
-| Multiline evasion | Shell line-continuation normalization |
-| Download → eval | Alternative command structure |
-| EICAR | Standard antivirus test signature |
-| Memory variant reuse | Behavioral reuse across file variants |
+The suite includes baseline shell indicators, multiline evasion, download-to-evaluation, EICAR, and behavior-memory variant reuse.
 
 **Nothing in the red-team lab is executed.**
 
@@ -304,7 +292,7 @@ For authorized live testing, use a disposable VM or dedicated test installation.
 
 BIOAEGIS includes the standard EICAR anti-malware test signature as an inert local fixture.
 
-It is used to validate the complete defensive path:
+The regression pipeline validates:
 
 ```text
 EICAR fixture
@@ -326,7 +314,17 @@ The fixture is never executed by BIOAEGIS.
 
 ---
 
-## Testing & CI
+## Runtime and service hardening
+
+Linux process telemetry continues to use `/proc` without killing processes or executing command lines.
+
+For a controlled user-level deployment, the repository provides `service/bioaegis-user.service` with systemd hardening directives such as `NoNewPrivileges`, `PrivateTmp`, `ProtectSystem=strict`, `ProtectHome=read-only`, and `MemoryDenyWriteExecute`.
+
+This is user-service hardening, not a root privilege-separated endpoint daemon. A production deployment would require a dedicated service account, explicit privilege boundaries, lifecycle supervision, and stronger IPC authentication.
+
+---
+
+## Development / tests
 
 Run locally:
 
@@ -335,18 +333,9 @@ bioaegis test
 bioaegis redteam
 ```
 
-The GitHub Actions workflow runs the regression suite and CLI smoke tests for:
+GitHub Actions validates pytest plus CLI smoke tests for version, redteam, scan, audit, and monitor.
 
-```text
-pytest
---version
-redteam
-scan tests
-audit tests
-monitor tests --once
-```
-
-The current validated suite contains **19 automated tests**, and the latest complete CI validation passed all workflow steps.
+The current test suite covers **27 automated checks**, including confidence fusion, behavior clustering, local integrity signatures, archive inspection, specialist-provider contracts, sandbox manifests, and Linux near-real-time event monitoring.
 
 ---
 
@@ -359,6 +348,13 @@ BIOAEGIS/
 │   ├── host_scanner.py         # Read-only filesystem scanner
 │   ├── host_specialist.py      # Disposable deterministic specialist
 │   ├── host_engine.py          # Detection / response lifecycle
+│   ├── confidence.py           # Evidence fusion / confidence scoring
+│   ├── behavior.py             # Deterministic behavior clustering
+│   ├── archive_scanner.py      # Safe archive inspection
+│   ├── integrity.py            # Local policy/memory integrity
+│   ├── specialist_api.py       # Constrained specialist provider API
+│   ├── sandbox.py              # Non-executing analysis workspace
+│   ├── realtime.py             # Linux inotify event source
 │   ├── quarantine.py            # Reversible isolation + restore
 │   ├── runtime_scanner.py      # Linux process telemetry
 │   ├── persistence_scanner.py  # User persistence telemetry
@@ -368,11 +364,12 @@ BIOAEGIS/
 │   ├── redteam.py              # Inert red-team lab
 │   ├── validator.py            # Response allow-list validator
 │   └── memory.py               # Persistent immune memory
+├── service/
+│   └── bioaegis-user.service   # Hardened user-systemd template
 ├── tests/
-│   ├── fixtures/
-│   │   ├── eicar.com.txt       # Inert EICAR test fixture
-│   │   └── README.md
-│   └── test_bioaegis.py        # Regression suite
+│   ├── fixtures/               # Inert regression fixtures, including EICAR
+│   ├── test_bioaegis.py        # Core regression suite
+│   └── test_roadmap.py         # Research-baseline feature tests
 ├── memory/
 │   └── countermeasures.json    # Stored validated responses
 ├── .github/workflows/
@@ -383,9 +380,9 @@ BIOAEGIS/
 
 ---
 
-## Roadmap
+## Roadmap status
 
-### Research foundations
+### Research foundation — implemented baseline
 
 - [x] Read-only filesystem scanner
 - [x] Normal/deep scan modes
@@ -401,26 +398,34 @@ BIOAEGIS/
 - [x] Listening-socket inventory
 - [x] Unified audit
 - [x] Polling monitor
+- [x] Near-real-time Linux inotify event source
+- [x] Deterministic confidence scoring and evidence fusion
+- [x] Deterministic behavior clustering
+- [x] Local integrity/signature primitive
+- [x] Hardened user-systemd deployment template
+- [x] Safe archive/container inspection baseline
+- [x] Non-executing isolated analysis workspace
+- [x] Constrained specialist-provider API
 - [x] Inert red-team regression lab
 - [x] EICAR regression fixture
 - [x] Continuous integration
 
-### Next research areas
+### Production-grade work still open
 
-- [ ] Real-time filesystem/process monitoring
-- [ ] Confidence scoring and evidence fusion
-- [ ] Stronger behavioral clustering
-- [ ] Memory integrity and signed policy data
-- [ ] Privilege-separated system service
-- [ ] Isolated malware-analysis sandbox
-- [ ] Pluggable local specialist models
-- [ ] Broader archive/container analysis
+The research roadmap is implemented at baseline level, but these items remain necessary before claiming endpoint-product maturity:
+
+- [ ] Hardware-backed or externally anchored policy signing
+- [ ] Strong kernel / driver telemetry
+- [ ] Complete memory forensics
+- [ ] Production malware detonation sandbox with verified isolation
+- [ ] Privilege-separated service with authenticated IPC
+- [ ] Mature local ML model with adversarial evaluation
+- [ ] Comprehensive container/archive format coverage
+- [ ] Continuous adversarial benchmark corpus
 
 ---
 
 ## Security philosophy
-
-BIOAEGIS is built around a few deliberately strict rules:
 
 > **Untrusted input never becomes an instruction.**
 
@@ -428,18 +433,10 @@ BIOAEGIS is built around a few deliberately strict rules:
 
 > **No validated cure is remembered before the defense is verified.**
 
-> **When a safe response does not exist, the system should fail closed rather than guess.**
+> **When confidence is insufficient, BIOAEGIS should preserve evidence and escalate rather than guess.**
 
 ---
 
-## Limitations
+## License / status
 
-BIOAEGIS remains an experimental security project. Its current implementation is useful for controlled research, defensive engineering, and architecture experimentation, but it should **not** be represented as equivalent to mature commercial endpoint-security products.
-
-In particular, it currently lacks complete kernel-level telemetry, full memory forensics, comprehensive network intrusion detection, continuous real-time enforcement, mature anti-tamper infrastructure, and broad malware-family coverage.
-
----
-
-## License
-
-See the repository license file for the applicable terms.
+BIOAEGIS is experimental security research software. Use it in controlled environments and do not treat its current implementation as equivalent to mature commercial endpoint-security products.
