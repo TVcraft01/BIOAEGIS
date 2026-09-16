@@ -31,6 +31,8 @@ SUSPICIOUS_PATTERNS = (
     ("destructive-command", re.compile(rb"(?:rm[ \t]+-rf[ \t]+/|mkfs\.|dd[ \t]+if=/dev/(?:zero|random))")),
 )
 
+LINE_CONTINUATION = re.compile(rb"\\\r?\n[ \t]*")
+
 TEXT_EXTENSIONS = {
     ".bash", ".c", ".cc", ".cpp", ".css", ".csv", ".conf", ".fish", ".go",
     ".h", ".hpp", ".html", ".htm", ".ini", ".java", ".js", ".json", ".jsx",
@@ -133,8 +135,9 @@ class HostScanner:
                 return None
 
             if self._is_text_like(path, sample[:TEXT_SAMPLE_BYTES]):
+                analysis_sample = LINE_CONTINUATION.sub(b" ", sample)
                 for label, pattern in SUSPICIOUS_PATTERNS:
-                    if pattern.search(sample):
+                    if pattern.search(analysis_sample):
                         behaviors.add(label)
                         evidence.append(label)
                         score += 2
