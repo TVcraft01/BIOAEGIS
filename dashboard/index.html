@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#07090d">
+  <title>BIOAEGIS // Security Console</title>
+  <link rel="stylesheet" href="/dashboard/style.css">
+</head>
+<body>
+  <div class="noise"></div>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Primary navigation">
+      <div class="brand-block">
+        <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div>
+          <div class="brand">BIOAEGIS</div>
+          <div class="brand-sub">DEFENSIVE SECURITY</div>
+        </div>
+      </div>
+
+      <nav class="nav-list">
+        <button class="nav-item active" data-section="overview"><span class="nav-icon">◈</span><span>Overview</span></button>
+        <button class="nav-item" data-section="detections"><span class="nav-icon">⌁</span><span>Detections</span></button>
+        <button class="nav-item" data-section="memory"><span class="nav-icon">⬢</span><span>Immune Memory</span></button>
+        <button class="nav-item" data-section="quarantine"><span class="nav-icon">◫</span><span>Quarantine</span></button>
+        <button class="nav-item" data-section="telemetry"><span class="nav-icon">⌁</span><span>Telemetry</span></button>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <div class="engine-chip"><span class="pulse"></span><span>Local engine</span><strong>READY</strong></div>
+        <div class="version">BIOAEGIS <span id="version">—</span></div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <div class="eyebrow">SECURITY CONSOLE / HOST DEFENSE</div>
+          <h1 id="page-title">System overview</h1>
+          <p id="page-subtitle">A quiet view of what BIOAEGIS knows, observes and has contained.</p>
+        </div>
+        <div class="top-actions">
+          <div class="status-pill"><span class="status-dot"></span> LOCAL / ONLINE</div>
+          <button class="icon-button" id="refresh" aria-label="Refresh dashboard" title="Refresh">↻</button>
+        </div>
+      </header>
+
+      <section id="overview" class="section active-section">
+        <div class="hero-card reveal">
+          <div class="hero-copy">
+            <div class="hero-kicker">PROTECTION STATE</div>
+            <div class="hero-title">Defense systems nominal.</div>
+            <p>No arbitrary execution. Validated containment only. Every remembered response must pass the defense lifecycle.</p>
+            <div class="hero-meta"><span>ENGINE <b>READY</b></span><span>MODE <b>DEFENSE</b></span><span>MEMORY <b id="hero-memory">—</b></span></div>
+          </div>
+          <div class="orb" aria-hidden="true"><div class="orb-core"></div><div class="orb-ring ring-a"></div><div class="orb-ring ring-b"></div><div class="orb-grid"></div></div>
+        </div>
+
+        <div class="metrics-grid">
+          <article class="metric-card reveal"><div class="metric-label">IMMUNE RULES</div><div class="metric-value cyan" id="memory-count">—</div><div class="metric-note">validated countermeasures</div><div class="metric-line"><span></span></div></article>
+          <article class="metric-card reveal"><div class="metric-label">QUARANTINED</div><div class="metric-value amber" id="quarantine-count">—</div><div class="metric-note">reversible isolation records</div><div class="metric-line amber-line"><span></span></div></article>
+          <article class="metric-card reveal"><div class="metric-label">VALIDATION</div><div class="metric-value green">ENFORCED</div><div class="metric-note">allow-listed responses only</div><div class="metric-line green-line"><span></span></div></article>
+          <article class="metric-card reveal"><div class="metric-label">EXECUTION</div><div class="metric-value">BLOCKED</div><div class="metric-note">scanner path remains read-only</div><div class="metric-line neutral-line"><span></span></div></article>
+        </div>
+
+        <div class="content-grid two-one">
+          <section class="panel reveal">
+            <div class="panel-head"><div><div class="panel-kicker">LIVE STATE</div><h2>Defense pipeline</h2></div><span class="mini-badge">LOCAL</span></div>
+            <div class="pipeline">
+              <div class="stage done"><span class="stage-index">01</span><div><strong>Detect</strong><small>Collect evidence</small></div><i>✓</i></div>
+              <div class="connector"></div>
+              <div class="stage done"><span class="stage-index">02</span><div><strong>Investigate</strong><small>Disposable specialist</small></div><i>✓</i></div>
+              <div class="connector"></div>
+              <div class="stage active"><span class="stage-index">03</span><div><strong>Validate</strong><small>Independent policy gate</small></div><i>●</i></div>
+              <div class="connector"></div>
+              <div class="stage"><span class="stage-index">04</span><div><strong>Contain</strong><small>Reversible quarantine</small></div><i>—</i></div>
+              <div class="connector"></div>
+              <div class="stage"><span class="stage-index">05</span><div><strong>Remember</strong><small>Validated defense</small></div><i>—</i></div>
+            </div>
+          </section>
+
+          <section class="panel reveal">
+            <div class="panel-head"><div><div class="panel-kicker">RECOVERY</div><h2>Quarantine</h2></div><a class="text-link" href="#quarantine" data-jump="quarantine">Open →</a></div>
+            <div class="big-number" id="quarantine-big">—</div>
+            <div class="muted">records indexed locally</div>
+            <div class="progress-wrap"><div class="progress-meta"><span>Integrity workflow</span><b>HASH VERIFIED</b></div><div class="progress"><span style="width:100%"></span></div></div>
+            <div class="small-note">Files are moved rather than deleted and can be restored after verification.</div>
+          </section>
+        </div>
+
+        <div class="content-grid two-one">
+          <section class="panel reveal">
+            <div class="panel-head"><div><div class="panel-kicker">RECENT ACTIVITY</div><h2>Quarantine activity</h2></div><span class="small" id="updated">updating…</span></div>
+            <div id="activity-table" class="table-wrap"></div>
+          </section>
+          <section class="panel reveal accent-panel">
+            <div class="panel-kicker">SAFETY BOUNDARIES</div><h2>Hard stops</h2>
+            <div class="safety-list">
+              <div><span class="safety-icon green-icon">✓</span><span><b>Read-only scanning</b><small>Artifacts are inspected as data.</small></span></div>
+              <div><span class="safety-icon green-icon">✓</span><span><b>Allow-list validator</b><small>Unsupported actions are rejected.</small></span></div>
+              <div><span class="safety-icon green-icon">✓</span><span><b>Reversible quarantine</b><small>Recovery remains hash-verified.</small></span></div>
+              <div><span class="safety-icon amber-icon">!</span><span><b>Research status</b><small>Not production EDR/AV.</small></span></div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="detections" class="section">
+        <div class="section-heading"><div><div class="eyebrow">DETECTION WORKSPACE</div><h2>Evidence, not guesses.</h2><p>Start a controlled scan against a local path. Results stay inside the local console.</p></div></div>
+        <div class="panel scanner-panel reveal">
+          <div class="scan-row"><label for="scan-target">Target path</label><input id="scan-target" placeholder="/home/user/Downloads" autocomplete="off"><button id="scan-button" class="primary-button">Run scan</button></div>
+          <div class="scan-options"><label><input type="checkbox" id="deep-scan"> Deep scan</label><label><input type="checkbox" id="quarantine-scan"> Enable quarantine</label><span id="scan-state" class="small">Ready.</span></div>
+          <div id="scan-results" class="scan-results empty-state">No scan has been started.</div>
+        </div>
+      </section>
+
+      <section id="memory" class="section">
+        <div class="section-heading"><div><div class="eyebrow">IMMUNE MEMORY</div><h2>Validated defenses</h2><p>Only accepted countermeasures are retained.</p></div></div>
+        <div class="panel reveal"><div id="memory-table" class="table-wrap"></div></div>
+      </section>
+
+      <section id="quarantine" class="section">
+        <div class="section-heading"><div><div class="eyebrow">QUARANTINE</div><h2>Reversible containment</h2><p>Review locally isolated artifacts and their integrity state.</p></div></div>
+        <div class="panel reveal"><div id="quarantine-table" class="table-wrap"></div></div>
+      </section>
+
+      <section id="telemetry" class="section">
+        <div class="section-heading"><div><div class="eyebrow">HOST TELEMETRY</div><h2>Observe the host.</h2><p>Runtime, persistence and listener telemetry remain read-only.</p></div></div>
+        <div class="telemetry-grid">
+          <div class="panel reveal telemetry-card"><div class="telemetry-icon">◉</div><h3>Runtime</h3><strong>/proc</strong><p>Process command lines can be inspected without killing or executing anything.</p></div>
+          <div class="panel reveal telemetry-card"><div class="telemetry-icon">⌂</div><h3>Persistence</h3><strong>User scope</strong><p>Common startup locations are inspected without altering persistence.</p></div>
+          <div class="panel reveal telemetry-card"><div class="telemetry-icon">⇄</div><h3>Network</h3><strong>Listeners</strong><p>Local TCP/UDP listeners can be inventoried without network probing.</p></div>
+        </div>
+      </section>
+
+      <footer> BIOAEGIS <span id="footer-version">—</span> · local security console · evidence before action </footer>
+    </main>
+  </div>
+  <script src="/dashboard/app.js" defer></script>
+</body>
+</html>
