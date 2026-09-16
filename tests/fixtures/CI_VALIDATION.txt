@@ -1,0 +1,1 @@
+CI validation marker for the inert EICAR regression fixture.
