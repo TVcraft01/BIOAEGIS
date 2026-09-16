@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 
 from . import __version__
 from .audit import Auditor
 from .host_engine import HostEngine
 from .monitor import Monitor
+from .quarantine import Quarantine
 from .redteam import run as redteam_run
 from .test_runner import run as test_run
 from .tui import run
@@ -17,7 +19,7 @@ def _scan_command(target: str, quarantine: bool, deep: bool) -> int:
     engine = HostEngine(deep=deep)
     print(f"BIOAEGIS scan: {target}")
     print(f"Quarantine: {'ENABLED' if quarantine else 'DISABLED (detection only)'}")
-    print(f"Scan depth: {'DEEP (full hashes + ClamAV)' if deep else 'NORMAL (bounded static analysis)'}")
+    print(f"Scan depth: {'DEEP (full hashes + ClamAV)' if deep else 'NORMAL (selective bounded static analysis)'}")
     print()
     try:
         results = engine.scan(target, quarantine=quarantine)
@@ -75,6 +77,38 @@ def _monitor_command(target: str, interval: float, quarantine: bool, deep: bool,
         return 2
 
 
+def _quarantine_command(action: str, path: str | None) -> int:
+    quarantine = Quarantine()
+    try:
+        records = quarantine.list()
+        if action == "list":
+            if not records:
+                print("BIOAEGIS quarantine: empty")
+                return 0
+            print("BIOAEGIS quarantine")
+            for record in records:
+                status = "RESTORED" if record.restored_at is not None else "ISOLATED"
+                print(f"[{status}] {record.quarantine_path}")
+                print(f"  Original: {record.original_path}")
+                print(f"  SHA-256 : {record.sha256}")
+            return 0
+
+        if path is None:
+            print("ERROR: a quarantine path is required for restore")
+            return 2
+
+        record = quarantine.restore(path)
+        restored = datetime.fromtimestamp(record.restored_at or 0, tz=timezone.utc).isoformat()
+        print("BIOAEGIS quarantine restore")
+        print(f"  Restored: {record.original_path}")
+        print(f"  SHA-256 : {record.sha256}")
+        print(f"  Verified: {restored}")
+        return 0
+    except (OSError, ValueError) as exc:
+        print(f"ERROR: {exc}")
+        return 2
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="bioaegis", description="BIOAEGIS biological-inspired defensive system")
     parser.add_argument("--version", action="version", version=f"BIOAEGIS {__version__}")
@@ -96,6 +130,12 @@ def main() -> None:
     monitor.add_argument("--deep", action="store_true", help="Enable deep file scanning and ClamAV")
     monitor.add_argument("--once", action="store_true", help="Run one polling pass and exit")
 
+    quarantine = subparsers.add_parser("quarantine", help="Inspect or safely restore quarantined files")
+    quarantine_subparsers = quarantine.add_subparsers(dest="quarantine_action", required=True)
+    quarantine_subparsers.add_parser("list", help="List quarantined files")
+    restore = quarantine_subparsers.add_parser("restore", help="Restore one quarantined file and verify its SHA-256")
+    restore.add_argument("path", help="Quarantine path or filename")
+
     subparsers.add_parser("redteam", help="Run safe local red-team detection and memory tests")
     subparsers.add_parser("test", help="Run BIOAEGIS tests with its installed Python environment")
 
@@ -106,6 +146,8 @@ def main() -> None:
         raise SystemExit(_audit_command(args.target, args.deep))
     if args.command == "monitor":
         raise SystemExit(_monitor_command(args.target, args.interval, args.quarantine, args.deep, args.once))
+    if args.command == "quarantine":
+        raise SystemExit(_quarantine_command(args.quarantine_action, getattr(args, "path", None)))
     if args.command == "redteam":
         raise SystemExit(redteam_run())
     if args.command == "test":
