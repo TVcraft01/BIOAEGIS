@@ -1,8 +1,8 @@
 """Real, read-only host scanning for BIOAEGIS.
 
-Normal scans are bounded and fast. Deep scans add full SHA-256 hashing and an
-optional recursive ClamAV pass. Text heuristics are restricted to text-like
-inputs so large binary files do not cause expensive Python byte-by-byte work.
+Normal scans are deliberately selective: they sniff unknown files cheaply and
+fully inspect only text-like files and executables. Deep scans inspect every
+regular file, add full SHA-256 hashing, and optionally run recursive ClamAV.
 The scanner never executes a scanned file.
 """
 
@@ -18,6 +18,7 @@ from pathlib import Path
 
 NORMAL_ANALYSIS_BYTES = 512 * 1024
 DEEP_ANALYSIS_BYTES = 8 * 1024 * 1024
+NORMAL_SNIFF_BYTES = 4 * 1024
 MAX_ANALYSIS_BYTES = DEEP_ANALYSIS_BYTES
 TEXT_SAMPLE_BYTES = 256 * 1024
 CLAMAV_TIMEOUT_SECONDS = 30
@@ -63,7 +64,6 @@ class HostScanner:
         if not root.exists():
             raise FileNotFoundError(root)
         files = [root] if root.is_file() else self._walk(root)
-
         clamav_hits = self._clamav(root) if self.deep and self.clamscan else {}
 
         findings: list[HostFinding] = []
@@ -74,7 +74,10 @@ class HostScanner:
         return findings
 
     def _walk(self, root: Path):
-        skip_names = {".cache", ".npm", ".cargo", ".rustup", ".venv", "node_modules"}
+        skip_names = {
+            ".cache", ".npm", ".cargo", ".rustup", ".venv", "node_modules",
+            "__pycache__", ".gradle", ".m2",
+        }
         for current, dirs, files in os.walk(root, followlinks=False):
             dirs[:] = [
                 d for d in dirs
@@ -89,8 +92,6 @@ class HostScanner:
     def _inspect(self, path: Path, clamav_hits: dict[Path, str]) -> HostFinding | None:
         try:
             stat = path.stat()
-            with path.open("rb") as handle:
-                sample = handle.read(self.max_bytes)
         except (OSError, PermissionError):
             return None
 
@@ -98,34 +99,62 @@ class HostScanner:
         evidence: list[str] = []
         score = 0
 
-        if stat.st_mode & 0o111:
+        executable = bool(stat.st_mode & 0o111)
+        if executable:
             behaviors.add("executable")
             evidence.append("executable permission")
-        if path.name.startswith(".") and stat.st_mode & 0o111:
+        if path.name.startswith(".") and executable:
             behaviors.add("hidden_executable")
             evidence.append("hidden executable filename")
 
-        if self._is_text_like(path, sample[:TEXT_SAMPLE_BYTES]):
-            for label, pattern in SUSPICIOUS_PATTERNS:
-                if pattern.search(sample):
-                    behaviors.add(label)
-                    evidence.append(label)
-                    score += 2
-
-        clamav = clamav_hits.get(path)
+        clamav = clamav_hits.get(path.resolve())
         if clamav:
             behaviors.add("malware_signature")
             evidence.append(f"ClamAV: {clamav}")
             score += 10
 
+        sample = b""
+        should_read = self.deep or executable or path.suffix.lower() in TEXT_EXTENSIONS
+        if not should_read and not self.deep:
+            try:
+                with path.open("rb") as handle:
+                    sniff = handle.read(NORMAL_SNIFF_BYTES)
+            except (OSError, PermissionError):
+                return None
+            if not self._is_text_like(path, sniff):
+                return self._finding_if_scored(path, behaviors, score, evidence, clamav)
+            should_read = True
+
+        if should_read:
+            try:
+                with path.open("rb") as handle:
+                    sample = handle.read(self.max_bytes)
+            except (OSError, PermissionError):
+                return None
+
+            if self._is_text_like(path, sample[:TEXT_SAMPLE_BYTES]):
+                for label, pattern in SUSPICIOUS_PATTERNS:
+                    if pattern.search(sample):
+                        behaviors.add(label)
+                        evidence.append(label)
+                        score += 2
+
+        return self._finding_if_scored(path, behaviors, score, evidence, clamav)
+
+    def _finding_if_scored(
+        self,
+        path: Path,
+        behaviors: set[str],
+        score: int,
+        evidence: list[str],
+        clamav: str | None,
+    ) -> HostFinding | None:
         if score == 0:
             return None
-
         try:
             sha256 = self._hash_file(path)
         except (OSError, PermissionError):
             return None
-
         return HostFinding(path, sha256, frozenset(behaviors), score, tuple(evidence), clamav)
 
     @staticmethod
