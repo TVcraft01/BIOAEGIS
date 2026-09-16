@@ -1,7 +1,8 @@
 """Real, read-only host scanning for BIOAEGIS.
 
-The scanner never executes a scanned file. It collects conservative static
-signals and optionally consumes ClamAV results when clamscan is installed.
+Normal scans are bounded and fast: files are sampled, but clean files are not
+fully hashed. Deep scans add full SHA-256 hashing and an optional recursive
+ClamAV pass. The scanner never executes a scanned file.
 """
 
 from __future__ import annotations
@@ -38,8 +39,9 @@ class HostFinding:
 class HostScanner:
     """Read-only scanner. It never quarantines, deletes, or executes findings."""
 
-    def __init__(self, max_bytes: int = MAX_ANALYSIS_BYTES) -> None:
+    def __init__(self, max_bytes: int = MAX_ANALYSIS_BYTES, deep: bool = False) -> None:
         self.max_bytes = max_bytes
+        self.deep = deep
         self.clamscan = shutil.which("clamscan")
 
     def scan(self, target: str | Path) -> list[HostFinding]:
@@ -48,10 +50,9 @@ class HostScanner:
             raise FileNotFoundError(root)
         files = [root] if root.is_file() else self._walk(root)
 
-        # Run ClamAV once for the whole target instead of starting a new
-        # process for every file. This avoids a 30-second timeout per file
-        # on directories containing many files.
-        clamav_hits = self._clamav(root) if self.clamscan else {}
+        # Deep mode is intentionally opt-in because ClamAV recursively reads
+        # the target and full hashing can be expensive for multi-GB files.
+        clamav_hits = self._clamav(root) if self.deep and self.clamscan else {}
 
         findings: list[HostFinding] = []
         for path in files:
@@ -74,7 +75,6 @@ class HostScanner:
             stat = path.stat()
             with path.open("rb") as handle:
                 sample = handle.read(self.max_bytes)
-            sha256 = self._hash_file(path)
         except (OSError, PermissionError):
             return None
 
@@ -103,6 +103,14 @@ class HostScanner:
 
         if not behaviors or score == 0:
             return None
+
+        # Full hashing is only needed for a finding. This keeps normal scans
+        # from reading every byte of large ISO/archive/media files.
+        try:
+            sha256 = self._hash_file(path)
+        except (OSError, PermissionError):
+            return None
+
         return HostFinding(path, sha256, frozenset(behaviors), score, tuple(evidence), clamav)
 
     @staticmethod
