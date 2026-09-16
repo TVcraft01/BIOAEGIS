@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-INSTALLER_VERSION="2026-09-14.4"
+INSTALLER_VERSION="2026-09-16.1"
 REPO_URL="https://github.com/TVcraft01/BIOAEGIS.git"
 INSTALL_DIR="${BIOAEGIS_HOME:-$HOME/.local/share/bioaegis}"
 BIN_DIR="${BIOAEGIS_BIN:-$HOME/.local/bin}"
@@ -20,8 +20,6 @@ say "Installer $INSTALLER_VERSION"
 say "Installing to $INSTALL_DIR"
 mkdir -p "$(dirname "$INSTALL_DIR")" "$BIN_DIR"
 
-# Always obtain a clean checkout in a temporary directory. This avoids stale
-# local files, interrupted installs, and rebase configuration in old checkouts.
 TMP_PARENT="$(mktemp -d "${TMPDIR:-/tmp}/bioaegis-install.XXXXXX")"
 TMP_REPO="$TMP_PARENT/repo"
 cleanup() { rm -rf "$TMP_PARENT"; }
