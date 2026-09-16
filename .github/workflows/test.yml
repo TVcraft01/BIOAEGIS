@@ -20,3 +20,6 @@ jobs:
       - run: python -m pytest -q tests
       - run: python -m bioaegis --version
       - run: python -m bioaegis redteam
+      - run: python -m bioaegis scan tests
+      - run: python -m bioaegis audit tests
+      - run: python -m bioaegis monitor tests --once
