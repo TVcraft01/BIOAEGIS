@@ -70,6 +70,14 @@ def test_host_scanner_ignores_binary_pattern_noise(tmp_path):
     assert HostScanner().scan(sample) == []
 
 
+def test_host_scanner_uses_smaller_normal_read_budget():
+    from bioaegis.host_scanner import DEEP_ANALYSIS_BYTES, NORMAL_ANALYSIS_BYTES, HostScanner
+
+    assert HostScanner().max_bytes == NORMAL_ANALYSIS_BYTES
+    assert HostScanner(deep=True).max_bytes == DEEP_ANALYSIS_BYTES
+    assert NORMAL_ANALYSIS_BYTES < DEEP_ANALYSIS_BYTES
+
+
 def test_host_engine_quarantines_and_remembers(tmp_path):
     from bioaegis.host_engine import HostEngine
     from bioaegis.memory import ImmuneMemory
