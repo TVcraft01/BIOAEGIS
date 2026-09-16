@@ -114,30 +114,30 @@ def main() -> None:
     subparsers = parser.add_subparsers(dest="command")
 
     scan = subparsers.add_parser("scan", help="Scan a file or directory")
-    scan.add_argument("target", help="File or directory to scan")
-    scan.add_argument("--quarantine", action="store_true", help="Isolate validated findings into the local quarantine")
-    scan.add_argument("--deep", action="store_true", help="Full-hash findings and run recursive ClamAV")
+    scan.add_argument("target")
+    scan.add_argument("--quarantine", action="store_true")
+    scan.add_argument("--deep", action="store_true")
 
     audit = subparsers.add_parser("audit", help="Read-only file, process, persistence, and network audit")
-    audit.add_argument("target", help="File or directory to scan")
-    audit.add_argument("--deep", action="store_true", help="Enable deep file scanning and ClamAV")
+    audit.add_argument("target")
+    audit.add_argument("--deep", action="store_true")
 
     monitor = subparsers.add_parser("monitor", help="Continuously watch defensive telemetry")
-    monitor.add_argument("target", help="File or directory to monitor")
-    monitor.add_argument("--interval", type=float, default=5.0, help="Polling interval in seconds")
-    monitor.add_argument("--quarantine", action="store_true", help="Quarantine newly detected files")
-    monitor.add_argument("--deep", action="store_true", help="Enable deep file scanning and ClamAV")
-    monitor.add_argument("--once", action="store_true", help="Run one polling pass and exit")
+    monitor.add_argument("target")
+    monitor.add_argument("--interval", type=float, default=5.0)
+    monitor.add_argument("--quarantine", action="store_true")
+    monitor.add_argument("--deep", action="store_true")
+    monitor.add_argument("--once", action="store_true")
 
-    dashboard = subparsers.add_parser("dashboard", help="Open the local BIOAEGIS security dashboard")
+    dashboard = subparsers.add_parser("dashboard", help="Open the local BIOAEGIS security console")
     dashboard.add_argument("--host", default="127.0.0.1", help="Bind address (default: loopback only)")
-    dashboard.add_argument("--port", type=int, default=8765, help="HTTP port (default: 8765)")
+    dashboard.add_argument("--port", type=int, default=8765, help="HTTP port")
 
     quarantine = subparsers.add_parser("quarantine", help="Inspect or safely restore quarantined files")
     quarantine_subparsers = quarantine.add_subparsers(dest="quarantine_action", required=True)
     quarantine_subparsers.add_parser("list", help="List quarantined files")
-    restore = quarantine_subparsers.add_parser("restore", help="Restore one quarantined file and verify its SHA-256")
-    restore.add_argument("path", help="Quarantine path or filename")
+    restore = quarantine_subparsers.add_parser("restore", help="Restore one quarantined file")
+    restore.add_argument("path")
 
     subparsers.add_parser("redteam", help="Run safe local red-team detection and memory tests")
     subparsers.add_parser("test", help="Run BIOAEGIS tests with its installed Python environment")
@@ -150,7 +150,7 @@ def main() -> None:
     if args.command == "monitor":
         raise SystemExit(_monitor_command(args.target, args.interval, args.quarantine, args.deep, args.once))
     if args.command == "dashboard":
-        dashboard_serve(args.host, args.port)
+        dashboard_serve(host=args.host, port=args.port)
         return
     if args.command == "quarantine":
         raise SystemExit(_quarantine_command(args.quarantine_action, getattr(args, "path", None)))
