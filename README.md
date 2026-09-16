@@ -8,7 +8,7 @@
 
 **v0.4.0 — defensive research prototype.**
 
-BIOAEGIS currently provides read-only static file scanning, optional ClamAV deep scanning, reversible quarantine, behavior-based immune memory, a disposable specialist, an independent validator, Linux process telemetry, user persistence inspection, and read-only listening-socket inventory.
+BIOAEGIS currently provides read-only static file scanning, optional ClamAV deep scanning, reversible quarantine, behavior-based immune memory, a disposable specialist, an independent validator, Linux process telemetry, user persistence inspection, read-only listening-socket inventory, and a polling live monitor for controlled tests.
 
 It is **not a production antivirus**. The specialist is still deterministic rather than a trained AI model, and the system does not provide guaranteed zero-day, kernel-level, memory-forensics, or complete network-intrusion detection.
 
@@ -61,14 +61,31 @@ bioaegis audit ~
 bioaegis audit ~ --deep
 ```
 
-The audit combines:
-
-- file/static findings;
-- suspicious running-process command lines from `/proc`;
-- common user persistence locations such as autostart, user systemd units, and shell startup files;
-- listening TCP/UDP sockets from `/proc/net`.
+The audit combines file/static findings, suspicious running-process command lines from `/proc`, common user persistence locations, and listening TCP/UDP sockets from `/proc/net`.
 
 The audit never kills processes, closes sockets, deletes persistence entries, or modifies the host.
+
+## Live monitor
+
+For a controlled friend-led test, start the polling monitor in a disposable VM or dedicated test installation:
+
+```bash
+bioaegis monitor ~/Downloads --interval 2
+```
+
+For a single pass:
+
+```bash
+bioaegis monitor ~/Downloads --once
+```
+
+To enable the existing reversible quarantine response for newly detected file findings:
+
+```bash
+bioaegis monitor ~/Downloads --interval 2 --quarantine
+```
+
+The monitor does not kill processes, alter persistence, or probe network ports.
 
 ## Red-team lab
 
@@ -80,7 +97,7 @@ bioaegis redteam
 
 The fixtures are inert: BIOAEGIS writes pattern examples, scans them without executing them, tests quarantine, and verifies behavior-based variant handling.
 
-For an authorized friend-led test, use a disposable VM or dedicated test installation rather than the machine containing important data. The friend can use the audit output to see whether suspicious file content, persistence indicators, running-command indicators, or listening services become visible.
+For an authorized friend-led test, use a disposable VM or dedicated test installation rather than the machine containing important data. The friend can use `audit` or `monitor` to see whether suspicious file content, persistence indicators, running-command indicators, or listening services become visible.
 
 ## Safety model
 
@@ -173,17 +190,7 @@ python -m bioaegis redteam
 
 Continuous integration runs the same tests on pushes and pull requests.
 
-The test suite covers:
-
-- immune-memory learning and variant reuse;
-- rejection of arbitrary commands;
-- suspicious static behavior detection;
-- binary false-positive resistance;
-- reversible quarantine and verification;
-- behavior variants with distinct hashes;
-- persistence telemetry;
-- `/proc` runtime parsing;
-- listener decoding.
+The test suite covers immune-memory learning and variant reuse, rejection of arbitrary commands, suspicious static behavior detection, binary false-positive resistance, reversible quarantine and verification, behavior variants with distinct hashes, persistence telemetry, `/proc` runtime parsing, and listener decoding.
 
 ## Architecture files
 
@@ -196,6 +203,7 @@ The test suite covers:
 - `bioaegis/persistence_scanner.py` — read-only user persistence telemetry
 - `bioaegis/network_scanner.py` — read-only socket listener inventory
 - `bioaegis/audit.py` — unified defensive audit
+- `bioaegis/monitor.py` — polling live defensive telemetry
 - `bioaegis/redteam.py` — inert local red-team regression lab
 - `bioaegis/validator.py` — independent allow-list validator
 - `bioaegis/memory.py` — persistent validated countermeasure memory
@@ -218,6 +226,7 @@ The test suite covers:
 - [x] User persistence telemetry
 - [x] Listening-socket inventory
 - [x] Unified audit command
+- [x] Polling live monitor
 - [x] Red-team regression lab
 - [x] Continuous integration
 
