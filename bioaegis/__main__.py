@@ -5,8 +5,9 @@ from __future__ import annotations
 import argparse
 
 from . import __version__
-from .redteam import run as redteam_run
+from .audit import Auditor
 from .host_engine import HostEngine
+from .redteam import run as redteam_run
 from .tui import run
 
 
@@ -41,6 +42,33 @@ def _scan_command(target: str, quarantine: bool, deep: bool) -> int:
     return 0
 
 
+def _audit_command(target: str, deep: bool) -> int:
+    print(f"BIOAEGIS audit: {target}")
+    print(f"Mode: {'DEEP' if deep else 'NORMAL'}")
+    print()
+    try:
+        report = Auditor(deep=deep).run(target)
+    except (OSError, ValueError) as exc:
+        print(f"ERROR: {exc}")
+        return 2
+
+    print(f"FILE FINDINGS       : {len(report.host)}")
+    print(f"RUNTIME FINDINGS    : {len(report.runtime)}")
+    print(f"PERSISTENCE FINDINGS: {len(report.persistence)}")
+
+    for item in report.host:
+        print(f"  FILE     [{item.finding.score:02d}] {item.finding.path}")
+        print(f"           {'; '.join(item.finding.evidence)}")
+    for item in report.runtime:
+        print(f"  PROCESS  [{item.score:02d}] PID {item.pid}: {item.command_line}")
+        print(f"           {'; '.join(sorted(item.signals))}")
+    for item in report.persistence:
+        print(f"  PERSIST  [{item.score:02d}] {item.path}")
+        print(f"           {'; '.join(item.evidence)}")
+
+    return 0
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="bioaegis",
@@ -59,14 +87,20 @@ def main() -> None:
     scan.add_argument(
         "--deep",
         action="store_true",
-        help="Full-hash findings and run recursive ClamAV (slower; useful for verification)",
+        help="Full-hash findings and run recursive ClamAV",
     )
+
+    audit = subparsers.add_parser("audit", help="Read-only file, process, and persistence audit")
+    audit.add_argument("target", help="File or directory to scan")
+    audit.add_argument("--deep", action="store_true", help="Enable deep file scanning and ClamAV")
 
     subparsers.add_parser("redteam", help="Run safe local red-team detection and memory tests")
 
     args = parser.parse_args()
     if args.command == "scan":
         raise SystemExit(_scan_command(args.target, args.quarantine, args.deep))
+    if args.command == "audit":
+        raise SystemExit(_audit_command(args.target, args.deep))
     if args.command == "redteam":
         raise SystemExit(redteam_run())
 
