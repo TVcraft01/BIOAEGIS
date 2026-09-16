@@ -7,6 +7,7 @@ import argparse
 from . import __version__
 from .audit import Auditor
 from .host_engine import HostEngine
+from .monitor import Monitor
 from .redteam import run as redteam_run
 from .tui import run
 
@@ -72,6 +73,14 @@ def _audit_command(target: str, deep: bool) -> int:
     return 0
 
 
+def _monitor_command(target: str, interval: float, quarantine: bool, deep: bool, once: bool) -> int:
+    try:
+        return Monitor(target, interval=interval, deep=deep).run(quarantine=quarantine, once=once)
+    except (OSError, ValueError) as exc:
+        print(f"ERROR: {exc}")
+        return 2
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="bioaegis",
@@ -82,20 +91,19 @@ def main() -> None:
 
     scan = subparsers.add_parser("scan", help="Scan a file or directory")
     scan.add_argument("target", help="File or directory to scan")
-    scan.add_argument(
-        "--quarantine",
-        action="store_true",
-        help="Actually isolate validated findings into the user-local quarantine",
-    )
-    scan.add_argument(
-        "--deep",
-        action="store_true",
-        help="Full-hash findings and run recursive ClamAV",
-    )
+    scan.add_argument("--quarantine", action="store_true", help="Isolate validated findings into the local quarantine")
+    scan.add_argument("--deep", action="store_true", help="Full-hash findings and run recursive ClamAV")
 
     audit = subparsers.add_parser("audit", help="Read-only file, process, persistence, and network audit")
     audit.add_argument("target", help="File or directory to scan")
     audit.add_argument("--deep", action="store_true", help="Enable deep file scanning and ClamAV")
+
+    monitor = subparsers.add_parser("monitor", help="Continuously watch defensive telemetry")
+    monitor.add_argument("target", help="File or directory to monitor")
+    monitor.add_argument("--interval", type=float, default=5.0, help="Polling interval in seconds (default: 5)")
+    monitor.add_argument("--quarantine", action="store_true", help="Quarantine newly detected files")
+    monitor.add_argument("--deep", action="store_true", help="Enable deep file scanning and ClamAV")
+    monitor.add_argument("--once", action="store_true", help="Run one polling pass and exit")
 
     subparsers.add_parser("redteam", help="Run safe local red-team detection and memory tests")
 
@@ -104,6 +112,8 @@ def main() -> None:
         raise SystemExit(_scan_command(args.target, args.quarantine, args.deep))
     if args.command == "audit":
         raise SystemExit(_audit_command(args.target, args.deep))
+    if args.command == "monitor":
+        raise SystemExit(_monitor_command(args.target, args.interval, args.quarantine, args.deep, args.once))
     if args.command == "redteam":
         raise SystemExit(redteam_run())
 
