@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-INSTALLER_VERSION="2026-09-16.3"
+INSTALLER_VERSION="2026-09-17.1"
 REPO_URL="https://github.com/TVcraft01/BIOAEGIS.git"
 INSTALL_DIR="${BIOAEGIS_HOME:-$HOME/.local/share/bioaegis}"
 BIN_DIR="${BIOAEGIS_BIN:-$HOME/.local/bin}"
@@ -31,6 +31,7 @@ git clone --quiet --branch main --single-branch "$REPO_URL" "$TMP_REPO"
 [ -f "$TMP_REPO/bioaegis/__main__.py" ] || fatal "The downloaded BIOAEGIS package is incomplete."
 [ -f "$TMP_REPO/bioaegis/__init__.py" ] || fatal "The downloaded BIOAEGIS package is incomplete."
 [ -f "$TMP_REPO/requirements-dev.txt" ] || fatal "requirements-dev.txt is missing from origin/main."
+[ -d "$TMP_REPO/tests" ] || fatal "The BIOAEGIS test suite is missing from origin/main."
 
 if [ -d "$INSTALL_DIR/.git" ]; then
     say "Existing installation found — replacing it with the verified checkout"
