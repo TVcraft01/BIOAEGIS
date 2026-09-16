@@ -121,6 +121,8 @@ bioaegis redteam
 
 The fixtures are inert: BIOAEGIS writes pattern examples, scans them without executing them, tests quarantine, and verifies behavior-based variant handling.
 
+The adversarial regression set includes shell line-continuation and download-to-evaluation variants that previously exposed signature coverage gaps. Immune-memory tests also verify that more-specific behavioral rules take precedence over broad earlier rules and that malformed memory fails closed.
+
 For an authorized friend-led test, use a disposable VM or dedicated test installation rather than the machine containing important data. The friend can use `audit` or `monitor` to see whether suspicious file content, persistence indicators, running-command indicators, or listening services become visible.
 
 ## Safety model
@@ -216,7 +218,7 @@ bioaegis redteam
 
 Continuous integration runs the regression suite plus CLI smoke tests for `scan`, `audit`, and `monitor --once` on pushes and pull requests.
 
-The test suite covers immune-memory learning and variant reuse, rejection of arbitrary commands, suspicious static behavior detection, binary false-positive resistance, normal/deep scanner budgets, selective unknown-file sniffing, reversible quarantine and hash verification, restore safety, behavior variants with distinct hashes, persistence telemetry, `/proc` runtime parsing, and listener decoding.
+The test suite covers immune-memory learning and variant reuse, rejection of arbitrary commands, suspicious static behavior detection, adversarial shell-line and download-eval variants, corrupt-memory fail-closed behavior, specificity ordering, binary false-positive resistance, normal/deep scanner budgets, selective unknown-file sniffing, reversible quarantine and hash verification, restore safety, behavior variants with distinct hashes, persistence telemetry, `/proc` runtime parsing, and listener decoding.
 
 ## Architecture files
 
