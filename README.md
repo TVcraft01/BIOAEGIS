@@ -6,7 +6,7 @@
 
 ## Current status
 
-**v0.5.0 — defensive research prototype.**
+**v0.5.1 — defensive research prototype.**
 
 BIOAEGIS currently provides read-only static file scanning, optional ClamAV deep scanning, reversible quarantine with verified restore, behavior-based immune memory, a disposable specialist, an independent validator, Linux process telemetry, user persistence inspection, read-only listening-socket inventory, and a polling live monitor for controlled tests.
 
@@ -214,7 +214,7 @@ bioaegis test
 bioaegis redteam
 ```
 
-Continuous integration runs the same tests on pushes and pull requests.
+Continuous integration runs the regression suite plus CLI smoke tests for `scan`, `audit`, and `monitor --once` on pushes and pull requests.
 
 The test suite covers immune-memory learning and variant reuse, rejection of arbitrary commands, suspicious static behavior detection, binary false-positive resistance, normal/deep scanner budgets, selective unknown-file sniffing, reversible quarantine and hash verification, restore safety, behavior variants with distinct hashes, persistence telemetry, `/proc` runtime parsing, and listener decoding.
 
@@ -258,6 +258,7 @@ The test suite covers immune-memory learning and variant reuse, rejection of arb
 - [x] Safe red-team regression lab
 - [x] Installer self-tests
 - [x] Continuous integration workflow
+- [x] CLI smoke coverage for scan, audit, and monitor
 
 ## Known future research work
 
