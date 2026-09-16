@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 
 from . import __version__
+from .redteam import run as redteam_run
 from .host_engine import HostEngine
 from .tui import run
 
@@ -61,9 +62,13 @@ def main() -> None:
         help="Full-hash findings and run recursive ClamAV (slower; useful for verification)",
     )
 
+    subparsers.add_parser("redteam", help="Run safe local red-team detection and memory tests")
+
     args = parser.parse_args()
     if args.command == "scan":
         raise SystemExit(_scan_command(args.target, args.quarantine, args.deep))
+    if args.command == "redteam":
+        raise SystemExit(redteam_run())
 
     run()
 
