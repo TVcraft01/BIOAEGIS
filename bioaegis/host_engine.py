@@ -31,11 +31,11 @@ class HostResult:
 class HostEngine:
     """Coordinates real defensive actions while keeping the specialist disposable."""
 
-    def __init__(self, memory: ImmuneMemory | None = None) -> None:
+    def __init__(self, memory: ImmuneMemory | None = None, deep: bool = False) -> None:
         self.memory = memory or ImmuneMemory()
         self.memory.load()
         self.validator = Validator()
-        self.scanner = HostScanner()
+        self.scanner = HostScanner(deep=deep)
         self.quarantine = Quarantine()
         self.general = GeneralScanner(self.memory)
 
