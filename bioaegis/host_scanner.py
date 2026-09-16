@@ -1,8 +1,9 @@
 """Real, read-only host scanning for BIOAEGIS.
 
-Normal scans are bounded and fast: files are sampled, but clean files are not
-fully hashed. Deep scans add full SHA-256 hashing and an optional recursive
-ClamAV pass. The scanner never executes a scanned file.
+Normal scans are bounded and fast. Deep scans add full SHA-256 hashing and an
+optional recursive ClamAV pass. Text-oriented heuristic rules are not applied
+to arbitrary binary files such as ISO images. The scanner never executes a
+scanned file.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from pathlib import Path
 
 MAX_ANALYSIS_BYTES = 8 * 1024 * 1024
 CLAMAV_TIMEOUT_SECONDS = 30
+TEXT_LIKELIHOOD_MIN = 0.85
 
 SUSPICIOUS_PATTERNS = (
     ("download-and-execute", re.compile(rb"(?:curl|wget)[^\n]{0,300}(?:\||;)[^\n]{0,100}(?:sh|bash)")),
@@ -24,6 +26,13 @@ SUSPICIOUS_PATTERNS = (
     ("reverse-shell", re.compile(rb"(?:/dev/tcp/|nc[ \t]+[^\n]{0,80}-e[ \t]+(?:/bin/)?(?:sh|bash))")),
     ("destructive-command", re.compile(rb"(?:rm[ \t]+-rf[ \t]+/|mkfs\.|dd[ \t]+if=/dev/(?:zero|random))")),
 )
+
+TEXT_EXTENSIONS = {
+    ".bash", ".c", ".cc", ".cpp", ".css", ".csv", ".conf", ".fish", ".go",
+    ".h", ".hpp", ".html", ".htm", ".ini", ".java", ".js", ".json", ".jsx",
+    ".log", ".md", ".php", ".pl", ".py", ".rb", ".rs", ".sh", ".sql", ".svg",
+    ".toml", ".ts", ".tsx", ".txt", ".xml", ".yaml", ".yml", ".zsh",
+}
 
 
 @dataclass(frozen=True)
@@ -50,8 +59,6 @@ class HostScanner:
             raise FileNotFoundError(root)
         files = [root] if root.is_file() else self._walk(root)
 
-        # Deep mode is intentionally opt-in because ClamAV recursively reads
-        # the target and full hashing can be expensive for multi-GB files.
         clamav_hits = self._clamav(root) if self.deep and self.clamscan else {}
 
         findings: list[HostFinding] = []
@@ -89,11 +96,17 @@ class HostScanner:
             behaviors.add("hidden_executable")
             evidence.append("hidden executable filename")
 
-        for label, pattern in SUSPICIOUS_PATTERNS:
-            if pattern.search(sample):
-                behaviors.add(label)
-                evidence.append(label)
-                score += 2
+        # Shell/content heuristics are only meaningful for text-like files.
+        # Applying strings such as "rm -rf /" to arbitrary binary containers
+        # causes false positives because binary data can coincidentally contain
+        # those byte sequences. Deep mode/ClamAV remains available for binaries.
+        analyze_text = self._is_text_like(path, sample)
+        if analyze_text:
+            for label, pattern in SUSPICIOUS_PATTERNS:
+                if pattern.search(sample):
+                    behaviors.add(label)
+                    evidence.append(label)
+                    score += 2
 
         clamav = clamav_hits.get(path)
         if clamav:
@@ -101,17 +114,28 @@ class HostScanner:
             evidence.append(f"ClamAV: {clamav}")
             score += 10
 
-        if not behaviors or score == 0:
+        # Executable permission by itself is not enough to flag a file.
+        # A signature or suspicious behavioral rule must raise the score.
+        if score == 0:
             return None
 
-        # Full hashing is only needed for a finding. This keeps normal scans
-        # from reading every byte of large ISO/archive/media files.
         try:
             sha256 = self._hash_file(path)
         except (OSError, PermissionError):
             return None
 
         return HostFinding(path, sha256, frozenset(behaviors), score, tuple(evidence), clamav)
+
+    @staticmethod
+    def _is_text_like(path: Path, sample: bytes) -> bool:
+        if path.suffix.lower() in TEXT_EXTENSIONS:
+            return True
+        if not sample:
+            return False
+        if b"\x00" in sample:
+            return False
+        printable = sum(byte in b"\t\n\r\f\b" or 32 <= byte < 127 for byte in sample)
+        return (printable / len(sample)) >= TEXT_LIKELIHOOD_MIN
 
     @staticmethod
     def _hash_file(path: Path) -> str:
