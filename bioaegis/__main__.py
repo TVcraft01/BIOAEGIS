@@ -9,10 +9,11 @@ from .host_engine import HostEngine
 from .tui import run
 
 
-def _scan_command(target: str, quarantine: bool) -> int:
-    engine = HostEngine()
+def _scan_command(target: str, quarantine: bool, deep: bool) -> int:
+    engine = HostEngine(deep=deep)
     print(f"BIOAEGIS scan: {target}")
     print(f"Quarantine: {'ENABLED' if quarantine else 'DISABLED (detection only)'}")
+    print(f"Scan depth: {'DEEP (full hashes + ClamAV)' if deep else 'NORMAL (bounded static analysis)'}")
     print()
 
     try:
@@ -54,10 +55,15 @@ def main() -> None:
         action="store_true",
         help="Actually isolate validated findings into the user-local quarantine",
     )
+    scan.add_argument(
+        "--deep",
+        action="store_true",
+        help="Full-hash findings and run recursive ClamAV (slower; useful for verification)",
+    )
 
     args = parser.parse_args()
     if args.command == "scan":
-        raise SystemExit(_scan_command(args.target, args.quarantine))
+        raise SystemExit(_scan_command(args.target, args.quarantine, args.deep))
 
     run()
 
