@@ -86,6 +86,56 @@ def test_host_scanner_finds_static_suspicious_behavior(tmp_path):
     assert findings[0].sha256
 
 
+def test_host_scanner_detects_eicar_fixture():
+    from pathlib import Path
+    from bioaegis.host_scanner import EICAR_TEST_SIGNATURE, HostScanner
+
+    fixture = Path(__file__).parent / "fixtures" / "eicar.com.txt"
+    assert fixture.read_bytes() == EICAR_TEST_SIGNATURE
+
+    findings = HostScanner().scan(fixture)
+    assert len(findings) == 1
+    assert "eicar-test-signature" in findings[0].behaviors
+    assert "EICAR test signature" in findings[0].evidence
+
+
+def test_eicar_end_to_end_quarantine_hash_and_memory(tmp_path):
+    import hashlib
+    import shutil
+    from pathlib import Path
+
+    from bioaegis.host_engine import HostEngine
+    from bioaegis.memory import ImmuneMemory
+    from bioaegis.host_scanner import EICAR_TEST_SIGNATURE
+    from bioaegis.quarantine import Quarantine
+
+    fixture = Path(__file__).parent / "fixtures" / "eicar.com.txt"
+    sample = tmp_path / "eicar.com"
+    shutil.copy2(fixture, sample)
+    expected_sha256 = hashlib.sha256(EICAR_TEST_SIGNATURE).hexdigest()
+
+    memory = ImmuneMemory(tmp_path / "memory.json")
+    engine = HostEngine(memory)
+    engine.quarantine = Quarantine(tmp_path / "quarantine")
+
+    results = engine.scan(str(sample), quarantine=True)
+    assert len(results) == 1
+    result = results[0]
+    assert result.quarantined is True
+    assert result.finding.sha256 == expected_sha256
+    assert result.quarantine_record is not None
+    assert result.quarantine_record.sha256 == expected_sha256
+    assert not sample.exists()
+    assert Path(result.quarantine_record.quarantine_path).read_bytes() == EICAR_TEST_SIGNATURE
+    assert len(memory.entries) == 1
+    assert memory.match(result.finding.behaviors) == memory.entries[0]
+
+    restored = engine.quarantine.restore(result.quarantine_record.quarantine_path)
+    assert restored.restored_at is not None
+    assert sample.read_bytes() == EICAR_TEST_SIGNATURE
+    assert hashlib.sha256(sample.read_bytes()).hexdigest() == expected_sha256
+
+
 def test_host_scanner_detects_multiline_download_evasion(tmp_path):
     from bioaegis.host_scanner import HostScanner
 
