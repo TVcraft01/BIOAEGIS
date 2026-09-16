@@ -78,6 +78,14 @@ def test_host_scanner_uses_smaller_normal_read_budget():
     assert NORMAL_ANALYSIS_BYTES < DEEP_ANALYSIS_BYTES
 
 
+def test_host_scanner_sniffs_unknown_file_before_deep_read(tmp_path):
+    from bioaegis.host_scanner import HostScanner, NORMAL_SNIFF_BYTES
+
+    sample = tmp_path / "unknown"
+    sample.write_bytes(b"A" * (NORMAL_SNIFF_BYTES * 4))
+    assert HostScanner().scan(sample) == []
+
+
 def test_host_engine_quarantines_and_remembers(tmp_path):
     from bioaegis.host_engine import HostEngine
     from bioaegis.memory import ImmuneMemory
@@ -97,6 +105,42 @@ def test_host_engine_quarantines_and_remembers(tmp_path):
     assert not sample.exists()
     assert results[0].quarantine_record is not None
     assert len(memory.entries) == 1
+
+
+def test_quarantine_restore_verifies_hash(tmp_path):
+    from bioaegis.quarantine import Quarantine
+
+    sample = tmp_path / "restore-me.txt"
+    sample.write_text("safe fixture\n", encoding="utf-8")
+    digest = __import__("hashlib").sha256(sample.read_bytes()).hexdigest()
+    quarantine = Quarantine(tmp_path / "quarantine")
+
+    record = quarantine.isolate(sample, digest)
+    restored = quarantine.restore(record.quarantine_path)
+
+    assert restored.restored_at is not None
+    assert sample.read_text(encoding="utf-8") == "safe fixture\n"
+    assert not __import__("pathlib").Path(record.quarantine_path).exists()
+    assert quarantine.list()[0].restored_at is not None
+
+
+def test_quarantine_refuses_restore_over_existing_file(tmp_path):
+    from bioaegis.quarantine import Quarantine
+
+    sample = tmp_path / "restore-me.txt"
+    sample.write_text("original\n", encoding="utf-8")
+    digest = __import__("hashlib").sha256(sample.read_bytes()).hexdigest()
+    quarantine = Quarantine(tmp_path / "quarantine")
+    record = quarantine.isolate(sample, digest)
+    sample.write_text("different\n", encoding="utf-8")
+
+    restored_error = None
+    try:
+        quarantine.restore(record.quarantine_path)
+    except FileExistsError as exc:
+        restored_error = exc
+    assert restored_error is not None
+    assert sample.read_text(encoding="utf-8") == "different\n"
 
 
 def test_behavior_variant_has_different_hash(tmp_path):
