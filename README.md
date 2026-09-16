@@ -240,38 +240,38 @@ GitHub Actions runs package installation, source compilation, the full test suit
 
 ```text
 BIOAEGIS/
-├── bioaegis/                 # Application package
-│   ├── host_scanner.py       # Static host scanning
-│   ├── host_engine.py        # Detection / response lifecycle
-│   ├── host_specialist.py    # Disposable deterministic specialist
-│   ├── validator.py          # Response policy boundary
-│   ├── memory.py             # Persistent immune memory
-│   ├── confidence.py         # Evidence fusion
-│   ├── behavior.py           # Behavior similarity / clustering
-│   ├── archive_scanner.py    # Safe archive inspection
-│   ├── integrity.py          # Local integrity primitive
-│   ├── specialist_api.py     # Specialist provider interface
-│   ├── sandbox.py             # Non-executing analysis workspace
-│   ├── realtime.py            # Linux inotify event source
-│   ├── quarantine.py          # Reversible containment
-│   ├── runtime_scanner.py     # Process telemetry
-│   ├── persistence_scanner.py# Persistence telemetry
-│   ├── network_scanner.py     # Listener inventory
-│   ├── monitor.py             # Polling monitor
-│   ├── audit.py               # Unified audit
-│   └── redteam.py             # Inert adversarial regression lab
-├── tests/                     # Automated regression coverage
-├── docs/                      # Design and architecture references
-├── service/                   # systemd deployment template
-├── memory/                    # Persistent validated responses
-├── .github/                   # CI and contribution workflow
-├── pyproject.toml             # Package metadata and tooling
-├── install.sh                 # User-local bootstrap installer
-├── requirements-dev.txt       # Development dependencies
-├── SECURITY.md                # Security reporting policy
-├── CONTRIBUTING.md            # Contribution guide
-├── CODE_OF_CONDUCT.md         # Community standards
-└── LICENSE                    # MIT license
+├── bioaegis/                  # Application package
+│   ├── host_scanner.py        # Static host scanning
+│   ├── host_engine.py         # Detection / response lifecycle
+│   ├── host_specialist.py     # Disposable deterministic specialist
+│   ├── validator.py            # Response policy boundary
+│   ├── memory.py               # Persistent immune memory
+│   ├── confidence.py           # Evidence fusion
+│   ├── behavior.py             # Behavior similarity / clustering
+│   ├── archive_scanner.py      # Safe archive inspection
+│   ├── integrity.py            # Local integrity primitive
+│   ├── specialist_api.py       # Specialist provider interface
+│   ├── sandbox.py               # Non-executing analysis workspace
+│   ├── realtime.py              # Linux inotify event source
+│   ├── quarantine.py            # Reversible containment
+│   ├── runtime_scanner.py       # Process telemetry
+│   ├── persistence_scanner.py  # Persistence telemetry
+│   ├── network_scanner.py       # Listener inventory
+│   ├── monitor.py               # Polling monitor
+│   ├── audit.py                 # Unified audit
+│   └── redteam.py               # Inert adversarial regression lab
+├── tests/                      # Automated regression coverage
+├── docs/                       # Design and architecture references
+├── service/                    # systemd deployment template
+├── memory/                     # Persistent validated responses
+├── .github/                    # CI and contribution workflow
+├── pyproject.toml              # Package metadata and tooling
+├── install.sh                  # User-local bootstrap installer
+├── requirements-dev.txt        # Development dependencies
+├── SECURITY.md                 # Security reporting policy
+├── CONTRIBUTING.md             # Contribution guide
+├── CODE_OF_CONDUCT.md          # Community standards
+└── LICENSE                     # MIT license
 ```
 
 ## Roadmap
