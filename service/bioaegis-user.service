@@ -1,0 +1,19 @@
+[Unit]
+Description=BIOAEGIS defensive monitor (user service)
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/bioaegis monitor %h/Downloads --interval 2
+Restart=on-failure
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.local/share/bioaegis
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+[Install]
+WantedBy=default.target
