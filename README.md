@@ -6,9 +6,9 @@
 
 ## Current status
 
-**v0.4.1 — defensive research prototype.**
+**v0.5.0 — defensive research prototype.**
 
-BIOAEGIS currently provides read-only static file scanning, optional ClamAV deep scanning, reversible quarantine, behavior-based immune memory, a disposable specialist, an independent validator, Linux process telemetry, user persistence inspection, read-only listening-socket inventory, and a polling live monitor for controlled tests.
+BIOAEGIS currently provides read-only static file scanning, optional ClamAV deep scanning, reversible quarantine with verified restore, behavior-based immune memory, a disposable specialist, an independent validator, Linux process telemetry, user persistence inspection, read-only listening-socket inventory, and a polling live monitor for controlled tests.
 
 It is **not a production antivirus**. The specialist is still deterministic rather than a trained AI model, and the system does not provide guaranteed zero-day, kernel-level, memory-forensics, or complete network-intrusion detection.
 
@@ -23,6 +23,7 @@ Then:
 ```bash
 bioaegis --version
 bioaegis test
+bioaegis redteam
 ```
 
 The installer uses a user-local virtual environment, runs the test suite during installation, and does not require root privileges.
@@ -47,11 +48,29 @@ Real quarantine is explicit:
 bioaegis scan ~/Downloads --quarantine
 ```
 
+Normal scanning is optimized for responsiveness: executable files, known text/script formats, and unknown files that cheaply sniff as text receive content analysis. Deep mode inspects every regular file and may invoke ClamAV.
+
 Quarantined files are moved, not deleted, to:
 
 ```text
 ~/.local/share/bioaegis/quarantine/
 ```
+
+## Quarantine recovery
+
+List the quarantine:
+
+```bash
+bioaegis quarantine list
+```
+
+Restore a file only when you have reviewed it:
+
+```bash
+bioaegis quarantine restore ~/.local/share/bioaegis/quarantine/<file>.quarantined
+```
+
+Restore requires a matching quarantine record, verifies the stored SHA-256 before moving the file, refuses to overwrite an existing destination, and verifies the SHA-256 again after restoration.
 
 ## Unified audit
 
@@ -64,7 +83,7 @@ bioaegis audit ~ --deep
 
 The audit combines file/static findings, suspicious running-process command lines from `/proc`, common user persistence locations, and listening TCP/UDP sockets from `/proc/net`.
 
-Normal home-directory scanning skips common cache/build trees to keep the audit responsive. Deep scanning remains available explicitly.
+Normal home-directory scanning skips common cache/build trees and uses selective content inspection to keep the audit responsive. Deep scanning remains available explicitly.
 
 The audit never kills processes, closes sockets, deletes persistence entries, or modifies the host.
 
@@ -147,12 +166,12 @@ For an authorized friend-led test, use a disposable VM or dedicated test install
 
 The host scanner is deliberately conservative and read-only:
 
-- bounded content sampling for normal scans;
+- selective bounded content sampling for normal scans;
+- deeper inspection and optional ClamAV in deep mode;
 - SHA-256 identity for actual findings;
 - executable and hidden-executable signals;
 - static signatures for several high-risk shell behaviors;
 - text-oriented heuristics are not applied blindly to binary containers such as ISO images;
-- optional ClamAV integration in deep mode;
 - no execution of scanned files.
 
 A heuristic signal is **not proof of malware**. Findings should be investigated, especially when an external signature engine is unavailable.
@@ -197,7 +216,7 @@ bioaegis redteam
 
 Continuous integration runs the same tests on pushes and pull requests.
 
-The test suite covers immune-memory learning and variant reuse, rejection of arbitrary commands, suspicious static behavior detection, binary false-positive resistance, reversible quarantine and verification, behavior variants with distinct hashes, persistence telemetry, `/proc` runtime parsing, and listener decoding.
+The test suite covers immune-memory learning and variant reuse, rejection of arbitrary commands, suspicious static behavior detection, binary false-positive resistance, normal/deep scanner budgets, selective unknown-file sniffing, reversible quarantine and hash verification, restore safety, behavior variants with distinct hashes, persistence telemetry, `/proc` runtime parsing, and listener decoding.
 
 ## Architecture files
 
@@ -205,7 +224,7 @@ The test suite covers immune-memory learning and variant reuse, rejection of arb
 - `bioaegis/host_scanner.py` — read-only filesystem scanner
 - `bioaegis/host_specialist.py` — disposable host-finding specialist
 - `bioaegis/host_engine.py` — detection → specialist → validation → quarantine → memory lifecycle
-- `bioaegis/quarantine.py` — reversible user-local isolation
+- `bioaegis/quarantine.py` — reversible user-local isolation and verified restore
 - `bioaegis/runtime_scanner.py` — read-only Linux process telemetry
 - `bioaegis/persistence_scanner.py` — read-only user persistence telemetry
 - `bioaegis/network_scanner.py` — read-only socket listener inventory
@@ -219,30 +238,32 @@ The test suite covers immune-memory learning and variant reuse, rejection of arb
 - `bioaegis/tui.py` — terminal research interface
 - `tests/test_bioaegis.py` — regression suite
 
-## Roadmap
+## v0.5 completion checklist
 
-### v0.4 — Defensive telemetry
 - [x] Real read-only filesystem scanner
-- [x] SHA-256 file identity
+- [x] Fast normal-mode candidate selection
+- [x] Deep file scan mode
+- [x] SHA-256 file identity and verification
 - [x] Optional ClamAV integration
 - [x] Disposable host specialist
 - [x] Independent action validator
 - [x] Reversible quarantine
-- [x] Quarantine verification
+- [x] Verified quarantine restore
 - [x] Immune-memory update after successful defense
 - [x] Process telemetry
 - [x] User persistence telemetry
 - [x] Listening-socket inventory
 - [x] Unified audit command
 - [x] Polling live monitor
-- [x] Red-team regression lab
-- [x] Continuous integration
+- [x] Safe red-team regression lab
+- [x] Installer self-tests
+- [x] Continuous integration workflow
 
-### Next
+## Known future research work
+
 - [ ] Isolated malware-analysis sandbox
 - [ ] Confidence scoring and evidence fusion
 - [ ] Memory integrity protection
-- [ ] Audit trail and rollback tooling
 - [ ] Stronger behavioral clustering
 - [ ] Pluggable local AI specialist
 - [ ] Real-time filesystem/process monitoring
