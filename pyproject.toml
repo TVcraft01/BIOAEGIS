@@ -22,6 +22,9 @@ classifiers = [
   "Topic :: Security",
 ]
 
+[project.optional-dependencies]
+desktop = ["pywebview>=5,<7"]
+
 [project.scripts]
 bioaegis = "bioaegis.__main__:main"
 bioaegis-app = "bioaegis.app:launch"
