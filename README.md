@@ -56,6 +56,7 @@ BIOAEGIS is an **experimental security research platform**, not a production ant
 | Local integrity primitive | Done | HMAC-based, not a trust root |
 | Analysis workspace | Done | Non-executing research sandbox |
 | Hardened user service | Done | systemd template |
+| Local security dashboard | Done | Loopback HTTP console with read-only APIs |
 | Red-team regression lab | Done | Inert fixtures only |
 | EICAR regression | Done | Standard anti-malware test fixture |
 
@@ -167,6 +168,32 @@ The telemetry components do not kill processes, execute command lines, probe rem
 
 `bioaegis.sandbox` creates a restricted, non-executing analysis workspace with an explicit manifest. It is **not** a production malware detonation sandbox and should not be treated as one.
 
+## Dashboard
+
+BIOAEGIS now includes a local security-console dashboard designed for a defensive workstation or lab.
+
+Start it with:
+
+```bash
+bioaegis dashboard
+```
+
+Then open:
+
+```text
+http://127.0.0.1:8765
+```
+
+The console provides a browser-based overview of engine state, immune-memory count, quarantine state, safeguards, and the detection lifecycle. It refreshes local state automatically and exposes small read-only JSON endpoints for health, memory, and quarantine data.
+
+The dashboard binds to **loopback by default**. It does not expose arbitrary remote-control endpoints and does not provide a web route for executing commands or changing security policy.
+
+Custom bind/port:
+
+```bash
+bioaegis dashboard --host 127.0.0.1 --port 8765
+```
+
 ## CLI
 
 Install the package in editable mode during development:
@@ -179,6 +206,7 @@ The main commands are:
 
 ```bash
 bioaegis --version
+bioaegis dashboard
 bioaegis scan ~/Downloads
 bioaegis scan ~/Downloads --deep
 bioaegis scan ~/Downloads --quarantine
@@ -246,6 +274,7 @@ BIOAEGIS/
 │   ├── host_specialist.py     # Disposable deterministic specialist
 │   ├── validator.py            # Response policy boundary
 │   ├── memory.py               # Persistent immune memory
+│   ├── dashboard.py             # Local web security console
 │   ├── confidence.py           # Evidence fusion
 │   ├── behavior.py             # Behavior similarity / clustering
 │   ├── archive_scanner.py      # Safe archive inspection
