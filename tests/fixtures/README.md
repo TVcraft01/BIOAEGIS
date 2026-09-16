@@ -1,0 +1,1 @@
+This directory contains inert defensive regression fixtures. The EICAR test fixture is a standard antivirus test pattern and is never executed by BIOAEGIS.
