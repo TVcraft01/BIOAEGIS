@@ -9,6 +9,7 @@ from .audit import Auditor
 from .host_engine import HostEngine
 from .monitor import Monitor
 from .redteam import run as redteam_run
+from .test_runner import run as test_run
 from .tui import run
 
 
@@ -18,17 +19,14 @@ def _scan_command(target: str, quarantine: bool, deep: bool) -> int:
     print(f"Quarantine: {'ENABLED' if quarantine else 'DISABLED (detection only)'}")
     print(f"Scan depth: {'DEEP (full hashes + ClamAV)' if deep else 'NORMAL (bounded static analysis)'}")
     print()
-
     try:
         results = engine.scan(target, quarantine=quarantine)
     except (OSError, ValueError) as exc:
         print(f"ERROR: {exc}")
         return 2
-
     if not results:
         print("No suspicious findings.")
         return 0
-
     for result in results:
         print(f"[{result.finding.score:02d}] {result.finding.path}")
         print(f"     SHA-256: {result.finding.sha256}")
@@ -39,7 +37,6 @@ def _scan_command(target: str, quarantine: bool, deep: bool) -> int:
         if result.quarantine_record:
             print(f"     Quarantine: {result.quarantine_record.quarantine_path}")
         print()
-
     return 0
 
 
@@ -52,12 +49,10 @@ def _audit_command(target: str, deep: bool) -> int:
     except (OSError, ValueError) as exc:
         print(f"ERROR: {exc}")
         return 2
-
     print(f"FILE FINDINGS       : {len(report.host)}")
     print(f"RUNTIME FINDINGS    : {len(report.runtime)}")
     print(f"PERSISTENCE FINDINGS: {len(report.persistence)}")
     print(f"LISTENERS           : {len(report.network)}")
-
     for item in report.host:
         print(f"  FILE     [{item.finding.score:02d}] {item.finding.path}")
         print(f"           {'; '.join(item.finding.evidence)}")
@@ -69,7 +64,6 @@ def _audit_command(target: str, deep: bool) -> int:
         print(f"           {'; '.join(item.evidence)}")
     for item in report.network:
         print(f"  LISTEN   {item.protocol} {item.address}:{item.port}")
-
     return 0
 
 
@@ -82,10 +76,7 @@ def _monitor_command(target: str, interval: float, quarantine: bool, deep: bool,
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        prog="bioaegis",
-        description="BIOAEGIS biological-inspired defensive system",
-    )
+    parser = argparse.ArgumentParser(prog="bioaegis", description="BIOAEGIS biological-inspired defensive system")
     parser.add_argument("--version", action="version", version=f"BIOAEGIS {__version__}")
     subparsers = parser.add_subparsers(dest="command")
 
@@ -100,12 +91,13 @@ def main() -> None:
 
     monitor = subparsers.add_parser("monitor", help="Continuously watch defensive telemetry")
     monitor.add_argument("target", help="File or directory to monitor")
-    monitor.add_argument("--interval", type=float, default=5.0, help="Polling interval in seconds (default: 5)")
+    monitor.add_argument("--interval", type=float, default=5.0, help="Polling interval in seconds")
     monitor.add_argument("--quarantine", action="store_true", help="Quarantine newly detected files")
     monitor.add_argument("--deep", action="store_true", help="Enable deep file scanning and ClamAV")
     monitor.add_argument("--once", action="store_true", help="Run one polling pass and exit")
 
     subparsers.add_parser("redteam", help="Run safe local red-team detection and memory tests")
+    subparsers.add_parser("test", help="Run BIOAEGIS tests with its installed Python environment")
 
     args = parser.parse_args()
     if args.command == "scan":
@@ -116,7 +108,8 @@ def main() -> None:
         raise SystemExit(_monitor_command(args.target, args.interval, args.quarantine, args.deep, args.once))
     if args.command == "redteam":
         raise SystemExit(redteam_run())
-
+    if args.command == "test":
+        raise SystemExit(test_run())
     run()
 
 
