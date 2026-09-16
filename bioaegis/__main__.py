@@ -55,6 +55,7 @@ def _audit_command(target: str, deep: bool) -> int:
     print(f"FILE FINDINGS       : {len(report.host)}")
     print(f"RUNTIME FINDINGS    : {len(report.runtime)}")
     print(f"PERSISTENCE FINDINGS: {len(report.persistence)}")
+    print(f"LISTENERS           : {len(report.network)}")
 
     for item in report.host:
         print(f"  FILE     [{item.finding.score:02d}] {item.finding.path}")
@@ -65,6 +66,8 @@ def _audit_command(target: str, deep: bool) -> int:
     for item in report.persistence:
         print(f"  PERSIST  [{item.score:02d}] {item.path}")
         print(f"           {'; '.join(item.evidence)}")
+    for item in report.network:
+        print(f"  LISTEN   {item.protocol} {item.address}:{item.port}")
 
     return 0
 
@@ -90,7 +93,7 @@ def main() -> None:
         help="Full-hash findings and run recursive ClamAV",
     )
 
-    audit = subparsers.add_parser("audit", help="Read-only file, process, and persistence audit")
+    audit = subparsers.add_parser("audit", help="Read-only file, process, persistence, and network audit")
     audit.add_argument("target", help="File or directory to scan")
     audit.add_argument("--deep", action="store_true", help="Enable deep file scanning and ClamAV")
 
