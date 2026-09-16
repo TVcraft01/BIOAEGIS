@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 from . import __version__
 from .audit import Auditor
+from .dashboard import serve as dashboard_serve
 from .host_engine import HostEngine
 from .monitor import Monitor
 from .quarantine import Quarantine
@@ -92,11 +93,9 @@ def _quarantine_command(action: str, path: str | None) -> int:
                 print(f"  Original: {record.original_path}")
                 print(f"  SHA-256 : {record.sha256}")
             return 0
-
         if path is None:
             print("ERROR: a quarantine path is required for restore")
             return 2
-
         record = quarantine.restore(path)
         restored = datetime.fromtimestamp(record.restored_at or 0, tz=timezone.utc).isoformat()
         print("BIOAEGIS quarantine restore")
@@ -130,6 +129,10 @@ def main() -> None:
     monitor.add_argument("--deep", action="store_true", help="Enable deep file scanning and ClamAV")
     monitor.add_argument("--once", action="store_true", help="Run one polling pass and exit")
 
+    dashboard = subparsers.add_parser("dashboard", help="Open the local BIOAEGIS security dashboard")
+    dashboard.add_argument("--host", default="127.0.0.1", help="Bind address (default: loopback only)")
+    dashboard.add_argument("--port", type=int, default=8765, help="HTTP port (default: 8765)")
+
     quarantine = subparsers.add_parser("quarantine", help="Inspect or safely restore quarantined files")
     quarantine_subparsers = quarantine.add_subparsers(dest="quarantine_action", required=True)
     quarantine_subparsers.add_parser("list", help="List quarantined files")
@@ -146,6 +149,9 @@ def main() -> None:
         raise SystemExit(_audit_command(args.target, args.deep))
     if args.command == "monitor":
         raise SystemExit(_monitor_command(args.target, args.interval, args.quarantine, args.deep, args.once))
+    if args.command == "dashboard":
+        dashboard_serve(args.host, args.port)
+        return
     if args.command == "quarantine":
         raise SystemExit(_quarantine_command(args.quarantine_action, getattr(args, "path", None)))
     if args.command == "redteam":
