@@ -40,8 +40,8 @@ class NetworkScanner:
             state = fields[3]
             if protocol.startswith("tcp") and state != "0A":
                 continue
-            address_hex, port_hex = local.rsplit(":", 1)
             try:
+                address_hex, port_hex = local.rsplit(":", 1)
                 port = int(port_hex, 16)
                 address = self._decode_address(address_hex, protocol.endswith("6"))
             except ValueError:
@@ -53,5 +53,10 @@ class NetworkScanner:
     def _decode_address(value: str, ipv6: bool) -> str:
         raw = bytes.fromhex(value)
         if ipv6:
+            if len(raw) != 16:
+                raise ValueError("invalid IPv6 address length")
+            raw = b"".join(raw[offset : offset + 4][::-1] for offset in range(0, 16, 4))
             return socket.inet_ntop(socket.AF_INET6, raw)
+        if len(raw) != 4:
+            raise ValueError("invalid IPv4 address length")
         return socket.inet_ntoa(raw[::-1])
