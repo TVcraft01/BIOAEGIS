@@ -26,6 +26,7 @@ TEXT_LIKELIHOOD_MIN = 0.85
 
 SUSPICIOUS_PATTERNS = (
     ("download-and-execute", re.compile(rb"(?:curl|wget)[^\n]{0,300}(?:\||;)[^\n]{0,100}(?:sh|bash)")),
+    ("download-eval", re.compile(rb"(?:curl|wget)[^\n]{0,300}(?:\$\(|<\()[^\n]{0,120}(?:eval|source|exec)")),
     ("base64-payload", re.compile(rb"base64[ \t]+(?:-d|--decode)")),
     ("reverse-shell", re.compile(rb"(?:/dev/tcp/|nc[ \t]+[^\n]{0,80}-e[ \t]+(?:/bin/)?(?:sh|bash))")),
     ("destructive-command", re.compile(rb"(?:rm[ \t]+-rf[ \t]+/|mkfs\.|dd[ \t]+if=/dev/(?:zero|random))")),
