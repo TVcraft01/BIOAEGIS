@@ -6,27 +6,27 @@
 
 ## Current status
 
-**v0.2.0 — real defensive research prototype.**
+**v0.4.0 — defensive research prototype.**
 
-BIOAEGIS can now perform a real, read-only static scan of files/directories, optionally use ClamAV when `clamscan` is installed, and isolate validated findings into a reversible user-local quarantine. The default scan is detection-only; real file movement requires the explicit `--quarantine` flag.
+BIOAEGIS currently provides read-only static file scanning, optional ClamAV deep scanning, reversible quarantine, behavior-based immune memory, a disposable specialist, an independent validator, Linux process telemetry, user persistence inspection, and read-only listening-socket inventory.
 
-It is **not yet a production antivirus**. The current specialist is deterministic static analysis, not a trained AI model, and the system does not provide kernel-level, memory-level, network-level, or guaranteed zero-day detection.
+It is **not a production antivirus**. The specialist is still deterministic rather than a trained AI model, and the system does not provide guaranteed zero-day, kernel-level, memory-forensics, or complete network-intrusion detection.
 
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/TVcraft01/BIOAEGIS/main/install.sh | bash
+curl -fsSL "https://raw.githubusercontent.com/TVcraft01/BIOAEGIS/main/install.sh?$(date +%s)" | bash
 ```
 
 Then:
 
 ```bash
-bioaegis
+bioaegis --version
 ```
 
-The installer uses a user-local virtual environment and does not require root privileges.
+The installer uses a user-local virtual environment, runs the test suite during installation, and does not require root privileges.
 
-## Real host scanning
+## File scanning
 
 Detection only:
 
@@ -34,9 +34,13 @@ Detection only:
 bioaegis scan ~/Downloads
 ```
 
-BIOAEGIS will report suspicious static behavior without changing the files.
+Deep verification:
 
-To enable the real quarantine action:
+```bash
+bioaegis scan ~/Downloads --deep
+```
+
+Real quarantine is explicit:
 
 ```bash
 bioaegis scan ~/Downloads --quarantine
@@ -48,75 +52,111 @@ Quarantined files are moved, not deleted, to:
 ~/.local/share/bioaegis/quarantine/
 ```
 
-An index records the original path, quarantine path, SHA-256, and timestamp.
+## Unified audit
 
-### Safety model
+BIOAEGIS can inspect four read-only layers at once:
+
+```bash
+bioaegis audit ~
+bioaegis audit ~ --deep
+```
+
+The audit combines:
+
+- file/static findings;
+- suspicious running-process command lines from `/proc`;
+- common user persistence locations such as autostart, user systemd units, and shell startup files;
+- listening TCP/UDP sockets from `/proc/net`.
+
+The audit never kills processes, closes sockets, deletes persistence entries, or modifies the host.
+
+## Red-team lab
+
+Run the built-in defensive regression suite:
+
+```bash
+bioaegis redteam
+```
+
+The fixtures are inert: BIOAEGIS writes pattern examples, scans them without executing them, tests quarantine, and verifies behavior-based variant handling.
+
+For an authorized friend-led test, use a disposable VM or dedicated test installation rather than the machine containing important data. The friend can use the audit output to see whether suspicious file content, persistence indicators, running-command indicators, or listening services become visible.
+
+## Safety model
 
 ```text
-                    REAL HOST FILE
+                    HOST / TEST VM
                            │
+          ┌────────────────┼────────────────┐
+          ▼                ▼                ▼
+      FILE SCAN       RUNTIME SCAN    PERSISTENCE SCAN
+          │                │                │
+          └────────────────┼────────────────┘
                            ▼
-                 ┌───────────────────┐
-                 │  GENERAL SCANNER  │
-                 │ read-only static  │
-                 │     analysis      │
-                 └─────────┬─────────┘
+                  GENERAL DETECTOR
                            │
                     unknown finding
                            │
                            ▼
-                 ┌───────────────────┐
-                 │ DISPOSABLE        │
-                 │ SPECIALIST        │
-                 │ investigate only  │
-                 └─────────┬─────────┘
+                 DISPOSABLE SPECIALIST
                            │
                     candidate cure
                            │
                            ▼
-                 ┌───────────────────┐
-                 │    VALIDATOR      │
-                 │ allow-listed      │
-                 │ response only     │
-                 └─────────┬─────────┘
+                      VALIDATOR
                            │
                  accepted │ rejected
                            │       └──► no action
                            ▼
-                 ┌───────────────────┐
-                 │   QUARANTINE      │
-                 │ reversible move   │
-                 └─────────┬─────────┘
+                      QUARANTINE
                            │
                       verify state
                            │
                            ▼
-                 ┌───────────────────┐
-                 │   IMMUNE MEMORY   │
-                 │ trigger + cure   │
-                 └─────────┬─────────┘
+                     IMMUNE MEMORY
                            │
                            ▼
-                 ┌───────────────────┐
-                 │ FRESH GENERAL     │
-                 │ SCANNER           │
-                 └───────────────────┘
-
-                 SPECIALIST → DISCARDED
+                 FRESH GENERAL SCANNER
+                           │
+                  specialist discarded
 ```
 
 ## Detection engines
 
-The current host scanner is deliberately conservative and read-only:
+The host scanner is deliberately conservative and read-only:
 
-- SHA-256 identity for findings.
-- Executable/hidden-executable signals.
-- Static signatures for several high-risk shell behaviors.
-- Optional ClamAV integration when `clamscan` is installed.
-- No execution of scanned files.
-- No arbitrary shell commands generated by the specialist.
+- bounded content sampling for normal scans;
+- SHA-256 identity for actual findings;
+- executable and hidden-executable signals;
+- static signatures for several high-risk shell behaviors;
+- text-oriented heuristics are not applied blindly to binary containers such as ISO images;
+- optional ClamAV integration in deep mode;
+- no execution of scanned files.
 
-A static signal is **not proof of malware**. Detection results must be treated as findings for investigation, especially when ClamAV is unavailable.
+A heuristic signal is **not proof of malware**. Findings should be investigated, especially when an external signature engine is unavailable.
+
+## Runtime telemetry
+
+`bioaegis/runtime_scanner.py` reads Linux `/proc` process metadata and looks only for suspicious command-line indicators such as reverse-shell syntax, download-to-shell patterns, encoded command indicators, and execution from temporary locations.
+
+It never sends signals to processes and never executes the captured command line.
+
+## Persistence telemetry
+
+`bioaegis/persistence_scanner.py` checks common user-level startup locations:
+
+- `~/.config/autostart/`;
+- `~/.config/systemd/user/`;
+- `~/.profile`;
+- `~/.bashrc`;
+- `~/.zshrc`;
+- `~/.config/fish/config.fish`.
+
+It is read-only and only reports suspicious content.
+
+## Network inventory
+
+`bioaegis/network_scanner.py` reads `/proc/net/tcp`, `/proc/net/tcp6`, `/proc/net/udp`, and `/proc/net/udp6` to inventory listeners. It does not probe ports or connect to services.
 
 ## Immune memory
 
@@ -124,41 +164,48 @@ BIOAEGIS stores the validated response rather than the specialist. Behavioral tr
 
 The real host lifecycle only commits a newly discovered countermeasure after the quarantine operation succeeds and the original path is confirmed absent while the quarantine copy exists.
 
-## Terminal interface
-
-`bioaegis` still provides the original curses research interface. Its `S` action remains simulation-only, while real host scanning is exposed explicitly through the `scan` command.
-
 ## Development / tests
 
 ```bash
-source .venv/bin/activate
 python -m pytest -q
+python -m bioaegis redteam
 ```
+
+Continuous integration runs the same tests on pushes and pull requests.
 
 The test suite covers:
 
 - immune-memory learning and variant reuse;
 - rejection of arbitrary commands;
-- real static suspicious-behavior detection;
-- reversible quarantine and post-quarantine verification.
+- suspicious static behavior detection;
+- binary false-positive resistance;
+- reversible quarantine and verification;
+- behavior variants with distinct hashes;
+- persistence telemetry;
+- `/proc` runtime parsing;
+- listener decoding.
 
 ## Architecture files
 
 - `bioaegis/general_scanner.py` — persistent immune-memory lookup
-- `bioaegis/host_scanner.py` — real read-only filesystem scanner
+- `bioaegis/host_scanner.py` — read-only filesystem scanner
 - `bioaegis/host_specialist.py` — disposable host-finding specialist
-- `bioaegis/host_engine.py` — real scan → specialist → validation → quarantine → memory lifecycle
+- `bioaegis/host_engine.py` — detection → specialist → validation → quarantine → memory lifecycle
 - `bioaegis/quarantine.py` — reversible user-local isolation
-- `bioaegis/specialist.py` — original simulation specialist
+- `bioaegis/runtime_scanner.py` — read-only Linux process telemetry
+- `bioaegis/persistence_scanner.py` — read-only user persistence telemetry
+- `bioaegis/network_scanner.py` — read-only socket listener inventory
+- `bioaegis/audit.py` — unified defensive audit
+- `bioaegis/redteam.py` — inert local red-team regression lab
 - `bioaegis/validator.py` — independent allow-list validator
 - `bioaegis/memory.py` — persistent validated countermeasure memory
 - `bioaegis/lifecycle.py` — original simulation lifecycle
 - `bioaegis/tui.py` — terminal research interface
-- `tests/test_bioaegis.py` — simulation and host-defense tests
+- `tests/test_bioaegis.py` — regression suite
 
 ## Roadmap
 
-### v0.2 — Host-defense research prototype
+### v0.4 — Defensive telemetry
 - [x] Real read-only filesystem scanner
 - [x] SHA-256 file identity
 - [x] Optional ClamAV integration
@@ -167,23 +214,24 @@ The test suite covers:
 - [x] Reversible quarantine
 - [x] Quarantine verification
 - [x] Immune-memory update after successful defense
+- [x] Process telemetry
+- [x] User persistence telemetry
+- [x] Listening-socket inventory
+- [x] Unified audit command
+- [x] Red-team regression lab
+- [x] Continuous integration
 
-### v0.3 — Adaptive security research
+### Next
 - [ ] Isolated malware-analysis sandbox
-- [ ] Process and persistence telemetry
 - [ ] Confidence scoring and evidence fusion
 - [ ] Memory integrity protection
 - [ ] Audit trail and rollback tooling
-- [ ] Stronger variant clustering
-
-### Later
+- [ ] Stronger behavioral clustering
 - [ ] Pluggable local AI specialist
 - [ ] Real-time filesystem/process monitoring
-- [ ] Controlled behavioral analysis
-- [ ] Hot-swappable general detector generations
 - [ ] Signed response policies
 - [ ] Privilege-separated system service
 
 ## Important limitation
 
-BIOAEGIS is an experimental security project. The current implementation is useful for researching the architecture and performing conservative defensive scanning, but it should not be represented as equivalent to mature endpoint-security products.
+BIOAEGIS remains an experimental security project. It is suitable for controlled defensive research and testing, but it should not be represented as equivalent to mature endpoint-security products.
