@@ -23,6 +23,7 @@ MAX_ANALYSIS_BYTES = DEEP_ANALYSIS_BYTES
 TEXT_SAMPLE_BYTES = 256 * 1024
 CLAMAV_TIMEOUT_SECONDS = 30
 TEXT_LIKELIHOOD_MIN = 0.85
+EICAR_TEST_SIGNATURE = b"X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
 
 SUSPICIOUS_PATTERNS = (
     ("download-and-execute", re.compile(rb"(?:curl|wget)[^\n]{0,300}(?:\||;)[^\n]{0,100}(?:sh|bash)")),
@@ -134,6 +135,11 @@ class HostScanner:
                     sample = handle.read(self.max_bytes)
             except (OSError, PermissionError):
                 return None
+
+            if EICAR_TEST_SIGNATURE in sample:
+                behaviors.add("eicar-test-signature")
+                evidence.append("EICAR test signature")
+                score += 10
 
             if self._is_text_like(path, sample[:TEXT_SAMPLE_BYTES]):
                 analysis_sample = LINE_CONTINUATION.sub(b" ", sample)
