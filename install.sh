@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-INSTALLER_VERSION="2026-09-16.1"
+INSTALLER_VERSION="2026-09-16.2"
 REPO_URL="https://github.com/TVcraft01/BIOAEGIS.git"
 INSTALL_DIR="${BIOAEGIS_HOME:-$HOME/.local/share/bioaegis}"
 BIN_DIR="${BIOAEGIS_BIN:-$HOME/.local/bin}"
@@ -55,6 +55,9 @@ say "Installing dependencies"
 
 say "Verifying BIOAEGIS package"
 PYTHONPATH="$INSTALL_DIR" "$VENV_PYTHON" -c 'import bioaegis; import bioaegis.__main__; print(f"BIOAEGIS {bioaegis.__version__} OK")'
+
+say "Running BIOAEGIS self-tests"
+PYTHONPATH="$INSTALL_DIR" "$VENV_PYTHON" -m pytest -q "$INSTALL_DIR/tests"
 
 cat > "$LAUNCHER" <<EOF
 #!/usr/bin/env bash
