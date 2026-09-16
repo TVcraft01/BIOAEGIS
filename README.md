@@ -6,7 +6,7 @@
 
 ## Current status
 
-**v0.4.0 — defensive research prototype.**
+**v0.4.1 — defensive research prototype.**
 
 BIOAEGIS currently provides read-only static file scanning, optional ClamAV deep scanning, reversible quarantine, behavior-based immune memory, a disposable specialist, an independent validator, Linux process telemetry, user persistence inspection, read-only listening-socket inventory, and a polling live monitor for controlled tests.
 
@@ -22,6 +22,7 @@ Then:
 
 ```bash
 bioaegis --version
+bioaegis test
 ```
 
 The installer uses a user-local virtual environment, runs the test suite during installation, and does not require root privileges.
@@ -63,6 +64,8 @@ bioaegis audit ~ --deep
 
 The audit combines file/static findings, suspicious running-process command lines from `/proc`, common user persistence locations, and listening TCP/UDP sockets from `/proc/net`.
 
+Normal home-directory scanning skips common cache/build trees to keep the audit responsive. Deep scanning remains available explicitly.
+
 The audit never kills processes, closes sockets, deletes persistence entries, or modifies the host.
 
 ## Live monitor
@@ -84,6 +87,8 @@ To enable the existing reversible quarantine response for newly detected file fi
 ```bash
 bioaegis monitor ~/Downloads --interval 2 --quarantine
 ```
+
+When monitoring the home directory, file inspection is throttled while process, persistence, and network telemetry continue every cycle.
 
 The monitor does not kill processes, alter persistence, or probe network ports.
 
@@ -183,9 +188,11 @@ The real host lifecycle only commits a newly discovered countermeasure after the
 
 ## Development / tests
 
+Use BIOAEGIS's installed interpreter so the private test dependencies are available:
+
 ```bash
-python -m pytest -q
-python -m bioaegis redteam
+bioaegis test
+bioaegis redteam
 ```
 
 Continuous integration runs the same tests on pushes and pull requests.
@@ -205,6 +212,7 @@ The test suite covers immune-memory learning and variant reuse, rejection of arb
 - `bioaegis/audit.py` — unified defensive audit
 - `bioaegis/monitor.py` — polling live defensive telemetry
 - `bioaegis/redteam.py` — inert local red-team regression lab
+- `bioaegis/test_runner.py` — installed-environment test runner
 - `bioaegis/validator.py` — independent allow-list validator
 - `bioaegis/memory.py` — persistent validated countermeasure memory
 - `bioaegis/lifecycle.py` — original simulation lifecycle
