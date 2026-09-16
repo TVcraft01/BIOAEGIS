@@ -1,0 +1,1 @@
+Inert CI validation note for the EICAR scanner/quarantine regression.
