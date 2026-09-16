@@ -16,7 +16,9 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-MAX_ANALYSIS_BYTES = 8 * 1024 * 1024
+NORMAL_ANALYSIS_BYTES = 512 * 1024
+DEEP_ANALYSIS_BYTES = 8 * 1024 * 1024
+MAX_ANALYSIS_BYTES = DEEP_ANALYSIS_BYTES
 TEXT_SAMPLE_BYTES = 256 * 1024
 CLAMAV_TIMEOUT_SECONDS = 30
 TEXT_LIKELIHOOD_MIN = 0.85
@@ -49,9 +51,11 @@ class HostFinding:
 class HostScanner:
     """Read-only scanner. It never quarantines, deletes, or executes findings."""
 
-    def __init__(self, max_bytes: int = MAX_ANALYSIS_BYTES, deep: bool = False) -> None:
-        self.max_bytes = max_bytes
+    def __init__(self, max_bytes: int | None = None, deep: bool = False) -> None:
         self.deep = deep
+        self.max_bytes = max_bytes if max_bytes is not None else (
+            DEEP_ANALYSIS_BYTES if deep else NORMAL_ANALYSIS_BYTES
+        )
         self.clamscan = shutil.which("clamscan")
 
     def scan(self, target: str | Path) -> list[HostFinding]:
