@@ -19,11 +19,17 @@ class ImmuneMemory:
             self._entries.append(countermeasure)
 
     def match(self, behavior: set[str] | frozenset[str]) -> Countermeasure | None:
+        """Return the most specific validated rule that matches this behavior.
+
+        A broad rule must never win merely because it was stored earlier. More
+        specific triggers take precedence, reducing accidental cross-family
+        reuse as immune memory grows.
+        """
         incoming = set(behavior)
-        for entry in self._entries:
-            if entry.trigger.issubset(incoming):
-                return entry
-        return None
+        matches = [entry for entry in self._entries if entry.trigger.issubset(incoming)]
+        if not matches:
+            return None
+        return max(matches, key=lambda entry: (len(entry.trigger), entry.name))
 
     def save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -40,16 +46,36 @@ class ImmuneMemory:
     def load(self) -> None:
         if not self.path.exists():
             return
-        payload = json.loads(self.path.read_text(encoding="utf-8"))
-        self._entries = [
-            Countermeasure(
-                name=item["name"],
-                trigger=frozenset(item["trigger"]),
-                actions=tuple(item["actions"]),
-                rationale=item["rationale"],
-            )
-            for item in payload
-        ]
+        try:
+            payload = json.loads(self.path.read_text(encoding="utf-8"))
+            if not isinstance(payload, list):
+                raise ValueError("immune memory must be a list")
+
+            entries: list[Countermeasure] = []
+            for item in payload:
+                if not isinstance(item, dict):
+                    raise ValueError("invalid immune memory entry")
+                trigger = item["trigger"]
+                actions = item["actions"]
+                if not isinstance(trigger, list) or not isinstance(actions, list):
+                    raise ValueError("invalid immune memory fields")
+                if not all(isinstance(value, str) for value in trigger + actions):
+                    raise ValueError("immune memory fields must contain strings")
+                entries.append(
+                    Countermeasure(
+                        name=str(item["name"]),
+                        trigger=frozenset(trigger),
+                        actions=tuple(actions),
+                        rationale=str(item["rationale"]),
+                    )
+                )
+        except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+            # Corrupted or manually altered memory must fail closed: do not
+            # reuse an entry whose structure cannot be trusted.
+            self._entries = []
+            return
+
+        self._entries = entries
 
     @property
     def entries(self) -> tuple[Countermeasure, ...]:
