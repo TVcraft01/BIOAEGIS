@@ -1,9 +1,9 @@
 """Real, read-only host scanning for BIOAEGIS.
 
 Normal scans are bounded and fast. Deep scans add full SHA-256 hashing and an
-optional recursive ClamAV pass. Text-oriented heuristic rules are not applied
-to arbitrary binary files such as ISO images. The scanner never executes a
-scanned file.
+optional recursive ClamAV pass. Text heuristics are restricted to text-like
+inputs so large binary files do not cause expensive Python byte-by-byte work.
+The scanner never executes a scanned file.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 MAX_ANALYSIS_BYTES = 8 * 1024 * 1024
+TEXT_SAMPLE_BYTES = 256 * 1024
 CLAMAV_TIMEOUT_SECONDS = 30
 TEXT_LIKELIHOOD_MIN = 0.85
 
@@ -69,8 +70,12 @@ class HostScanner:
         return findings
 
     def _walk(self, root: Path):
+        skip_names = {".cache", ".npm", ".cargo", ".rustup", ".venv", "node_modules"}
         for current, dirs, files in os.walk(root, followlinks=False):
-            dirs[:] = [d for d in dirs if not (Path(current) / d).is_symlink()]
+            dirs[:] = [
+                d for d in dirs
+                if d not in skip_names and not (Path(current) / d).is_symlink()
+            ]
             for name in files:
                 path = Path(current) / name
                 if path.is_symlink() or not path.is_file():
@@ -96,12 +101,7 @@ class HostScanner:
             behaviors.add("hidden_executable")
             evidence.append("hidden executable filename")
 
-        # Shell/content heuristics are only meaningful for text-like files.
-        # Applying strings such as "rm -rf /" to arbitrary binary containers
-        # causes false positives because binary data can coincidentally contain
-        # those byte sequences. Deep mode/ClamAV remains available for binaries.
-        analyze_text = self._is_text_like(path, sample)
-        if analyze_text:
+        if self._is_text_like(path, sample[:TEXT_SAMPLE_BYTES]):
             for label, pattern in SUSPICIOUS_PATTERNS:
                 if pattern.search(sample):
                     behaviors.add(label)
@@ -114,8 +114,6 @@ class HostScanner:
             evidence.append(f"ClamAV: {clamav}")
             score += 10
 
-        # Executable permission by itself is not enough to flag a file.
-        # A signature or suspicious behavioral rule must raise the score.
         if score == 0:
             return None
 
@@ -130,12 +128,15 @@ class HostScanner:
     def _is_text_like(path: Path, sample: bytes) -> bool:
         if path.suffix.lower() in TEXT_EXTENSIONS:
             return True
-        if not sample:
+        if not sample or b"\x00" in sample:
             return False
-        if b"\x00" in sample:
+        try:
+            sample.decode("utf-8")
+        except UnicodeDecodeError:
             return False
-        printable = sum(byte in b"\t\n\r\f\b" or 32 <= byte < 127 for byte in sample)
-        return (printable / len(sample)) >= TEXT_LIKELIHOOD_MIN
+        printable = sum(sample.count(bytes((value,))) for value in range(32, 127))
+        allowed = printable + sample.count(b"\t") + sample.count(b"\n") + sample.count(b"\r") + sample.count(b"\f") + sample.count(b"\b")
+        return (allowed / len(sample)) >= TEXT_LIKELIHOOD_MIN
 
     @staticmethod
     def _hash_file(path: Path) -> str:
@@ -146,7 +147,6 @@ class HostScanner:
         return digest.hexdigest()
 
     def _clamav(self, target: Path) -> dict[Path, str]:
-        """Return ClamAV detections keyed by path, using one bounded scan."""
         if not self.clamscan:
             return {}
         try:
