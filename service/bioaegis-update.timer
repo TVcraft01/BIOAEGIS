@@ -1,0 +1,11 @@
+[Unit]
+Description=Periodic BIOAEGIS signed update check
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=6h
+RandomizedDelaySec=20min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
