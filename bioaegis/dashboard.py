@@ -11,6 +11,7 @@ from . import __version__
 from .host_engine import HostEngine
 from .memory import ImmuneMemory
 from .quarantine import Quarantine
+from .status import read_status
 
 ASSETS = Path(__file__).with_name("dashboard_static")
 MIME = {".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "application/javascript; charset=utf-8"}
@@ -25,7 +26,7 @@ def _json_default(value: object) -> object:
 
 
 class _Handler(BaseHTTPRequestHandler):
-    server_version = "BIOAEGIS-Dashboard/2.0"
+    server_version = "BIOAEGIS-Dashboard/2.1"
 
     def _send(self, status: int, body: bytes, content_type: str) -> None:
         self.send_response(status)
@@ -57,7 +58,13 @@ class _Handler(BaseHTTPRequestHandler):
         if path.startswith("/dashboard/"):
             return self._asset(path.removeprefix("/dashboard/"))
         if path == "/api/health":
-            return self._json(200, {"status": "ready", "version": __version__, "local": True})
+            health = read_status()
+            return self._json(200, {
+                "status": health.get("status", "unknown"),
+                "version": __version__,
+                "local": True,
+                "protection": health,
+            })
         if path == "/api/memory":
             memory = ImmuneMemory()
             memory.load()
@@ -76,11 +83,17 @@ class _Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         if urlparse(self.path).path != "/api/scan":
             return self._json(404, {"error": "not found"})
-        length = int(self.headers.get("Content-Length", "0"))
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            return self._json(400, {"error": "invalid content length"})
         if length > 4096:
             return self._json(413, {"error": "request too large"})
-        raw = self.rfile.read(length).decode("utf-8", errors="strict")
-        form = parse_qs(raw, strict_parsing=False)
+        try:
+            raw = self.rfile.read(length).decode("utf-8", errors="strict")
+            form = parse_qs(raw, strict_parsing=False)
+        except (UnicodeDecodeError, ValueError):
+            return self._json(400, {"error": "invalid request body"})
         target = form.get("target", [""])[0]
         deep = form.get("deep", ["0"])[0] == "1"
         quarantine = form.get("quarantine", ["0"])[0] == "1"
@@ -93,7 +106,13 @@ class _Handler(BaseHTTPRequestHandler):
         payload = []
         for result in results:
             finding = result.finding
-            payload.append({"score": finding.score, "path": finding.path, "behaviors": sorted(finding.behaviors), "message": result.message})
+            payload.append({
+                "score": finding.score,
+                "confidence": result.confidence_level,
+                "path": finding.path,
+                "behaviors": sorted(finding.behaviors),
+                "message": result.message,
+            })
         self._json(200, {"results": payload})
 
     def log_message(self, format: str, *args: object) -> None:
