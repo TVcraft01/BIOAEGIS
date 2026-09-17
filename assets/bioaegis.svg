@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title>BIOAEGIS</title>
+  <desc>Hexagonal BIOAEGIS defensive security mark.</desc>
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#39f0ff"/>
+      <stop offset="1" stop-color="#63ff9d"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="48" fill="#07090d"/>
+  <path d="M128 20 210 66v92l-82 48-82-48V66z" fill="none" stroke="url(#g)" stroke-width="12"/>
+  <path d="M93 92h70M93 128h70M93 164h70" stroke="url(#g)" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="128" cy="92" r="7" fill="#fff"/>
+  <circle cx="128" cy="128" r="7" fill="#fff"/>
+  <circle cx="128" cy="164" r="7" fill="#fff"/>
+</svg>
