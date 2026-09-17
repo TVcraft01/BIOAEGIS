@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-INSTALLER_VERSION="2026-09-17.11"
+INSTALLER_VERSION="2026-09-17.12"
 REPO_URL="https://github.com/TVcraft01/BIOAEGIS.git"
 INSTALL_DIR="${BIOAEGIS_HOME:-$HOME/.local/share/bioaegis}"
 BIN_DIR="${BIOAEGIS_BIN:-$HOME/.local/bin}"
@@ -56,7 +56,6 @@ if command -v systemctl >/dev/null 2>&1; then
     systemctl --user stop bioaegis-update.timer >/dev/null 2>&1 || true
 fi
 
-# Never remove the installation while the invoking shell is inside it.
 CURRENT_DIR="$(pwd -P)"
 case "$CURRENT_DIR/" in
     "$INSTALL_DIR"/*)
@@ -104,6 +103,80 @@ say "Verifying BIOAEGIS package"
 say "Running BIOAEGIS self-tests"
 "$VENV_PYTHON" -m pytest -q "$INSTALL_DIR/tests"
 
+mkdir -p "$HOME/Downloads" "$HOME/Desktop" "$HOME/Documents" "$HOME/.cache/bioaegis"
+
 say "Creating installation integrity manifest"
-BIOAEGIS_HOME="$INSTALL_DIR" "$VENV_BIOAEGIS" test >/dev/null 2>&1 || true
-"$VENV_PYTHON" -c 'from bioaegis.tamper import write_manifest; import os; write_manifest(os.environ["BIOAEGIS_HOME"])'
+BIOAEGIS_HOME="$INSTALL_DIR" "$VENV_PYTHON" -c 'from bioaegis.tamper import write_manifest; import os; write_manifest(os.environ["BIOAEGIS_HOME"])'
+
+cat > "$LAUNCHER" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+exec "$VENV_BIOAEGIS" "\$@"
+EOF
+chmod +x "$LAUNCHER"
+
+cat > "$APP_LAUNCHER" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+exec "$VENV_APP" "\$@"
+EOF
+chmod +x "$APP_LAUNCHER"
+
+if command -v systemctl >/dev/null 2>&1; then
+    mkdir -p "$SERVICE_DIR"
+    cp "$INSTALL_DIR/service/bioaegis-user.service" "$SERVICE_FILE"
+    cp "$INSTALL_DIR/service/bioaegis-update.service" "$UPDATE_SERVICE_FILE"
+    cp "$INSTALL_DIR/service/bioaegis-update.timer" "$UPDATE_TIMER_FILE"
+    if systemctl --user daemon-reload >/dev/null 2>&1; then
+        if systemctl --user enable --now bioaegis-user.service >/dev/null 2>&1; then
+            say "Defensive monitor enabled and started automatically"
+        else
+            say "User protection service could not be started automatically"
+        fi
+        if systemctl --user enable --now bioaegis-update.timer >/dev/null 2>&1; then
+            say "Signed update checks scheduled automatically"
+        else
+            say "Signed update timer could not be enabled automatically"
+        fi
+    fi
+else
+    say "systemd user manager not available; background services are not auto-enabled"
+fi
+
+mkdir -p "$APP_DIR"
+cat > "$DESKTOP_FILE" <<EOF
+[Desktop Entry]
+Type=Application
+Name=BIOAEGIS Security Console
+Comment=Biologically inspired defensive security console
+Exec=$APP_LAUNCHER
+Icon=security-high
+Terminal=false
+Categories=Security;System;
+StartupNotify=true
+EOF
+chmod 0644 "$DESKTOP_FILE"
+
+mkdir -p "$AUTOSTART_DIR"
+cat > "$AUTOSTART_FILE" <<EOF
+[Desktop Entry]
+Type=Application
+Name=BIOAEGIS Security Console
+Comment=Start BIOAEGIS security console
+Exec=$APP_LAUNCHER
+Icon=security-high
+Terminal=false
+X-GNOME-Autostart-enabled=true
+X-KDE-autostart-after=panel
+EOF
+chmod 0644 "$AUTOSTART_FILE"
+
+say "Installation complete."
+say "BIOAEGIS protection runs in the background automatically."
+say "The security console is registered in the application menu and desktop login startup."
+say "Signed update verification is installed; updates are fail-closed until a signed release manifest is enabled."
+
+if [ "${BIOAEGIS_NO_AUTOSTART:-0}" != "1" ] && { [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; }; then
+    nohup "$APP_LAUNCHER" >/tmp/bioaegis-app.log 2>&1 &
+    say "Security console started"
+fi
