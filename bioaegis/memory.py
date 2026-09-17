@@ -18,7 +18,7 @@ class ImmuneMemory:
     def __init__(self, path: str | Path = "memory/countermeasures.json", key_path: str | Path | None = None) -> None:
         self.path = Path(path)
         self.signature_path = self.path.with_suffix(self.path.suffix + ".sig")
-        default_key = Path.home() / ".local" / "share" / "bioaegis" / "integrity.key"
+        default_key = Path.home() / ".config" / "bioaegis" / "integrity.key"
         self.key_path = Path(key_path or os.environ.get("BIOAEGIS_INTEGRITY_KEY", default_key))
         self._entries: list[Countermeasure] = []
 
