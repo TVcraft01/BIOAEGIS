@@ -9,21 +9,44 @@ import webbrowser
 from .dashboard import serve
 
 
+def _start_browser_fallback(url: str, thread: threading.Thread) -> None:
+    """Open the local console in the default browser and keep the server alive."""
+    print(f"BIOAEGIS native window unavailable; opening browser: {url}")
+    webbrowser.open(url)
+    thread.join()
+
+
 def launch(host: str = "127.0.0.1", port: int = 8765) -> None:
     """Launch BIOAEGIS as a desktop-style local web application.
 
-    If pywebview is installed, the console is placed in a native window.
-    Otherwise the system browser is opened automatically.
+    pywebview provides a native window when a supported GUI backend is available.
+    If pywebview or its native backend is unavailable, the local console opens in
+    the system browser instead of terminating with a traceback.
     """
     thread = threading.Thread(target=serve, kwargs={"host": host, "port": port}, daemon=True)
     thread.start()
     url = f"http://{host}:{port}"
     time.sleep(0.15)
+
     try:
         import webview  # type: ignore
+        from webview.errors import WebViewException  # type: ignore
     except ImportError:
-        webbrowser.open(url)
-        thread.join()
+        _start_browser_fallback(url, thread)
         return
-    webview.create_window("BIOAEGIS Security Console", url, width=1440, height=920, min_size=(1100, 700))
-    webview.start()
+
+    try:
+        webview.create_window(
+            "BIOAEGIS Security Console",
+            url,
+            width=1440,
+            height=920,
+            min_size=(1100, 700),
+        )
+        webview.start()
+    except WebViewException:
+        _start_browser_fallback(url, thread)
+
+
+if __name__ == "__main__":
+    launch()
