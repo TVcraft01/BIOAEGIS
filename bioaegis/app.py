@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import platform
 import threading
 import time
@@ -20,8 +21,20 @@ def _start_browser_fallback(url: str, thread: threading.Thread, reason: str | No
     thread.join()
 
 
+def _configure_linux_qt() -> None:
+    """Choose a predictable Qt platform and conservative WebEngine flags."""
+    if os.environ.get("QT_QPA_PLATFORM"):
+        return
+    if os.environ.get("WAYLAND_DISPLAY"):
+        os.environ["QT_QPA_PLATFORM"] = "wayland"
+    elif os.environ.get("DISPLAY"):
+        os.environ["QT_QPA_PLATFORM"] = "xcb"
+    os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu")
+
+
 def _launch_qt(url: str, thread: threading.Thread) -> None:
     """Run the Linux desktop console directly with PySide6 QtWebEngine."""
+    _configure_linux_qt()
     try:
         from PySide6.QtCore import QUrl
         from PySide6.QtWidgets import QApplication
@@ -41,7 +54,10 @@ def _launch_qt(url: str, thread: threading.Thread) -> None:
         window.raise_()
         window.activateWindow()
 
-        print("BIOAEGIS native Qt console started.")
+        print(
+            "BIOAEGIS native Qt console started "
+            f"(platform={os.environ.get('QT_QPA_PLATFORM', 'auto')})."
+        )
         started = time.monotonic()
         exit_code = app.exec()
         runtime = time.monotonic() - started
