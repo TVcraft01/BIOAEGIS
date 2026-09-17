@@ -111,6 +111,7 @@ BIOAEGIS_HOME="$INSTALL_DIR" "$VENV_PYTHON" -c 'from bioaegis.tamper import writ
 cat > "$LAUNCHER" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
+export BIOAEGIS_HOME="$INSTALL_DIR"
 exec "$VENV_BIOAEGIS" "\$@"
 EOF
 chmod +x "$LAUNCHER"
@@ -118,6 +119,7 @@ chmod +x "$LAUNCHER"
 cat > "$APP_LAUNCHER" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
+export BIOAEGIS_HOME="$INSTALL_DIR"
 exec "$VENV_APP" "\$@"
 EOF
 chmod +x "$APP_LAUNCHER"
