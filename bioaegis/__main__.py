@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -98,7 +99,9 @@ def _update_command(apply_update: bool) -> int:
         print("Update not applied. The signed release has passed verification.")
         return 0
 
-    root = Path(__file__).resolve().parents[1]
+    root = Path(os.environ.get("BIOAEGIS_HOME", Path.cwd())).resolve()
+    if not (root / "pyproject.toml").is_file():
+        raise RuntimeError(f"BIOAEGIS installation root not found: {root}")
     wheel = download_and_verify(update)
     apply_wheel(wheel, root)
     write_manifest(root)
