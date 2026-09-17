@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-INSTALLER_VERSION="2026-09-17.10"
+INSTALLER_VERSION="2026-09-17.11"
 REPO_URL="https://github.com/TVcraft01/BIOAEGIS.git"
 INSTALL_DIR="${BIOAEGIS_HOME:-$HOME/.local/share/bioaegis}"
 BIN_DIR="${BIOAEGIS_BIN:-$HOME/.local/bin}"
@@ -44,21 +44,19 @@ git clone --quiet --branch main --single-branch "$REPO_URL" "$TMP_REPO"
 [ -f "$TMP_REPO/bioaegis/protection.py" ] || fatal "The continuous protection engine is missing from origin/main."
 [ -f "$TMP_REPO/bioaegis/tamper.py" ] || fatal "The installation integrity module is missing from origin/main."
 [ -f "$TMP_REPO/bioaegis/updates.py" ] || fatal "The signed update verifier is missing from origin/main."
+[ -f "$TMP_REPO/bioaegis/trusted_update_key.pem" ] || fatal "The update trust anchor is missing from origin/main."
 [ -f "$TMP_REPO/requirements-dev.txt" ] || fatal "requirements-dev.txt is missing from origin/main."
 [ -d "$TMP_REPO/tests" ] || fatal "The BIOAEGIS test suite is missing from origin/main."
 [ -f "$TMP_REPO/service/bioaegis-user.service" ] || fatal "The protection service template is missing from origin/main."
 [ -f "$TMP_REPO/service/bioaegis-update.service" ] || fatal "The update service template is missing from origin/main."
 [ -f "$TMP_REPO/service/bioaegis-update.timer" ] || fatal "The update timer template is missing from origin/main."
 
-# Stop old workers before replacing their code. This prevents them from holding
-# deleted modules open during an upgrade.
 if command -v systemctl >/dev/null 2>&1; then
     systemctl --user stop bioaegis-user.service >/dev/null 2>&1 || true
     systemctl --user stop bioaegis-update.timer >/dev/null 2>&1 || true
 fi
 
 # Never remove the installation while the invoking shell is inside it.
-# Otherwise the shell keeps a deleted cwd and Python/pip can fail with getcwd errors.
 CURRENT_DIR="$(pwd -P)"
 case "$CURRENT_DIR/" in
     "$INSTALL_DIR"/*)
@@ -81,8 +79,10 @@ mv "$TMP_REPO" "$INSTALL_DIR"
 say "Creating Python virtual environment"
 rm -rf "$INSTALL_DIR/.venv"
 "$PYTHON" -m venv "$INSTALL_DIR/.venv"
-
-VENV_PYTHON="$INSTALL_DIR/.venv/bin/python"
+VENV_DIR="$INSTALL_DIR/.venv"
+VENV_PYTHON="$VENV_DIR/bin/python"
+VENV_BIOAEGIS="$VENV_DIR/bin/bioaegis"
+VENV_APP="$VENV_DIR/bin/bioaegis-app"
 [ -x "$VENV_PYTHON" ] || fatal "Could not create the Python virtual environment."
 
 say "Installing BIOAEGIS package, desktop runtime, update verifier, and test dependencies"
@@ -90,105 +90,20 @@ say "Installing BIOAEGIS package, desktop runtime, update verifier, and test dep
 case "$(uname -s)" in
     Linux)
         say "Linux detected — installing Qt/PySide6 native desktop backend"
-        "$VENV_PYTHON" -m pip install -e "${INSTALL_DIR}[desktop-qt,updates]"
+        "$VENV_PYTHON" -m pip install "${INSTALL_DIR}[desktop-qt,updates]"
         ;;
     *)
-        "$VENV_PYTHON" -m pip install -e "${INSTALL_DIR}[desktop,updates]"
+        "$VENV_PYTHON" -m pip install "${INSTALL_DIR}[desktop,updates]"
         ;;
 esac
 "$VENV_PYTHON" -m pip install -r "$INSTALL_DIR/requirements-dev.txt"
 
 say "Verifying BIOAEGIS package"
-PYTHONPATH="$INSTALL_DIR" "$VENV_PYTHON" -c 'import bioaegis; import bioaegis.__main__; import bioaegis.app; import bioaegis.protection; import bioaegis.tamper; import bioaegis.updates; print(f"BIOAEGIS {bioaegis.__version__} OK")'
+"$VENV_PYTHON" -c 'import bioaegis; import bioaegis.__main__; import bioaegis.app; import bioaegis.protection; import bioaegis.tamper; import bioaegis.updates; print(f"BIOAEGIS {bioaegis.__version__} OK")'
 
 say "Running BIOAEGIS self-tests"
-PYTHONPATH="$INSTALL_DIR" "$VENV_PYTHON" -m pytest -q "$INSTALL_DIR/tests"
+"$VENV_PYTHON" -m pytest -q "$INSTALL_DIR/tests"
 
 say "Creating installation integrity manifest"
-PYTHONPATH="$INSTALL_DIR" "$VENV_PYTHON" -c 'from bioaegis.tamper import write_manifest; write_manifest("$INSTALL_DIR")'
-
-cat > "$LAUNCHER" <<EOF
-#!/usr/bin/env bash
-set -euo pipefail
-export PYTHONPATH="$INSTALL_DIR\${PYTHONPATH:+:\$PYTHONPATH}"
-cd "$INSTALL_DIR"
-exec "$VENV_PYTHON" -m bioaegis "\$@"
-EOF
-chmod +x "$LAUNCHER"
-
-cat > "$APP_LAUNCHER" <<EOF
-#!/usr/bin/env bash
-set -euo pipefail
-export PYTHONPATH="$INSTALL_DIR\${PYTHONPATH:+:\$PYTHONPATH}"
-cd "$INSTALL_DIR"
-exec "$VENV_PYTHON" -m bioaegis.app "\$@"
-EOF
-chmod +x "$APP_LAUNCHER"
-
-# Ensure protected content directories exist so the hardened user service can
-# enter its writable paths without depending on the desktop having created them.
-mkdir -p "$HOME/Downloads" "$HOME/Desktop" "$HOME/Documents" "$HOME/.cache/bioaegis"
-
-# Install the defensive monitor and signed update timer as user services.
-if command -v systemctl >/dev/null 2>&1; then
-    mkdir -p "$SERVICE_DIR"
-    cp "$INSTALL_DIR/service/bioaegis-user.service" "$SERVICE_FILE"
-    cp "$INSTALL_DIR/service/bioaegis-update.service" "$UPDATE_SERVICE_FILE"
-    cp "$INSTALL_DIR/service/bioaegis-update.timer" "$UPDATE_TIMER_FILE"
-    if systemctl --user daemon-reload >/dev/null 2>&1; then
-        if systemctl --user enable --now bioaegis-user.service >/dev/null 2>&1; then
-            say "Defensive monitor enabled and started automatically"
-        else
-            say "User protection service could not be started automatically"
-        fi
-        if systemctl --user enable --now bioaegis-update.timer >/dev/null 2>&1; then
-            say "Signed update checks scheduled automatically"
-        else
-            say "Signed update timer could not be enabled automatically"
-        fi
-    fi
-else
-    say "systemd user manager not available; background services are not auto-enabled"
-fi
-
-# Add BIOAEGIS to the desktop application menu.
-mkdir -p "$APP_DIR"
-cat > "$DESKTOP_FILE" <<EOF
-[Desktop Entry]
-Type=Application
-Name=BIOAEGIS Security Console
-Comment=Biologically inspired defensive security console
-Exec=$APP_LAUNCHER
-Icon=security-high
-Terminal=false
-Categories=Security;System;
-StartupNotify=true
-EOF
-chmod 0644 "$DESKTOP_FILE"
-
-# Automatically open the graphical console at desktop login.
-mkdir -p "$AUTOSTART_DIR"
-cat > "$AUTOSTART_FILE" <<EOF
-[Desktop Entry]
-Type=Application
-Name=BIOAEGIS Security Console
-Comment=Start BIOAEGIS security console
-Exec=$APP_LAUNCHER
-Icon=security-high
-Terminal=false
-X-GNOME-Autostart-enabled=true
-X-KDE-autostart-after=panel
-EOF
-chmod 0644 "$AUTOSTART_FILE"
-
-say "Installation complete."
-say "BIOAEGIS protection runs in the background automatically."
-say "The security console is registered in the application menu and desktop login startup."
-say "Signed update verification is installed; automatic updates remain fail-closed until a signed release manifest is published."
-
-# Launch the console immediately when a graphical session exists. Future boots
-# use the desktop autostart entry; the protection service is independent of it.
-if [ "${BIOAEGIS_NO_AUTOSTART:-0}" != "1" ] && { [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; }; then
-    nohup "$APP_LAUNCHER" >/tmp/bioaegis-app.log 2>&1 &
-    say "Security console started"
-fi
+BIOAEGIS_HOME="$INSTALL_DIR" "$VENV_BIOAEGIS" test >/dev/null 2>&1 || true
+"$VENV_PYTHON" -c 'from bioaegis.tamper import write_manifest; import os; write_manifest(os.environ["BIOAEGIS_HOME"])'
