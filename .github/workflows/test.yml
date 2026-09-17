@@ -38,6 +38,23 @@ jobs:
       - name: Run tests
         run: python -m pytest -q
 
+      - name: Build wheel and verify trust anchor packaging
+        run: |
+          python -m pip install build
+          python -m build --wheel
+          python - <<'PY'
+          import glob
+          import zipfile
+
+          wheels = glob.glob("dist/*.whl")
+          if len(wheels) != 1:
+              raise SystemExit(f"expected one wheel, found {wheels}")
+          with zipfile.ZipFile(wheels[0]) as archive:
+              names = set(archive.namelist())
+              if not any(name.endswith("bioaegis/trusted_update_key.pem") for name in names):
+                  raise SystemExit("trusted_update_key.pem is missing from the wheel")
+          PY
+
       - name: CLI smoke tests
         run: |
           bioaegis --version
