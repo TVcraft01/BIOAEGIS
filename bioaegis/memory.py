@@ -1,17 +1,25 @@
-"""Protected immune memory: store the cure, not the specialist."""
+"""Protected immune memory: store validated responses, not investigators."""
+
+from __future__ import annotations
 
 from dataclasses import asdict
 import json
+import os
+import tempfile
 from pathlib import Path
 
+from .integrity import sign, verify
 from .models import Countermeasure
 
 
 class ImmuneMemory:
-    """Small JSON-backed memory of validated countermeasures."""
+    """JSON-backed memory with fail-closed HMAC integrity verification."""
 
-    def __init__(self, path: str | Path = "memory/countermeasures.json") -> None:
+    def __init__(self, path: str | Path = "memory/countermeasures.json", key_path: str | Path | None = None) -> None:
         self.path = Path(path)
+        self.signature_path = self.path.with_suffix(self.path.suffix + ".sig")
+        default_key = Path.home() / ".local" / "share" / "bioaegis" / "integrity.key"
+        self.key_path = Path(key_path or os.environ.get("BIOAEGIS_INTEGRITY_KEY", default_key))
         self._entries: list[Countermeasure] = []
 
     def remember(self, countermeasure: Countermeasure) -> None:
@@ -19,21 +27,14 @@ class ImmuneMemory:
             self._entries.append(countermeasure)
 
     def match(self, behavior: set[str] | frozenset[str]) -> Countermeasure | None:
-        """Return the most specific validated rule that matches this behavior.
-
-        A broad rule must never win merely because it was stored earlier. More
-        specific triggers take precedence, reducing accidental cross-family
-        reuse as immune memory grows.
-        """
         incoming = set(behavior)
         matches = [entry for entry in self._entries if entry.trigger.issubset(incoming)]
         if not matches:
             return None
         return max(matches, key=lambda entry: (len(entry.trigger), entry.name))
 
-    def save(self) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        payload = [
+    def _payload(self) -> bytes:
+        entries = [
             {
                 **asdict(entry),
                 "trigger": sorted(entry.trigger),
@@ -41,13 +42,42 @@ class ImmuneMemory:
             }
             for entry in self._entries
         ]
-        self.path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        return (json.dumps(entries, indent=2, sort_keys=True) + "\n").encode("utf-8")
+
+    @staticmethod
+    def _atomic_write(path: Path, payload: bytes) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd, temporary = tempfile.mkstemp(prefix=path.name + ".", dir=path.parent)
+        try:
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(payload)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary, path)
+            path.chmod(0o600)
+        finally:
+            try:
+                Path(temporary).unlink()
+            except FileNotFoundError:
+                pass
+
+    def save(self) -> None:
+        payload = self._payload()
+        signature = (sign(payload, self.key_path) + "\n").encode("ascii")
+        self._atomic_write(self.path, payload)
+        self._atomic_write(self.signature_path, signature)
 
     def load(self) -> None:
         if not self.path.exists():
+            self._entries = []
             return
         try:
-            payload = json.loads(self.path.read_text(encoding="utf-8"))
+            payload_bytes = self.path.read_bytes()
+            signature = self.signature_path.read_text(encoding="ascii").strip()
+            if not signature or not verify(payload_bytes, signature, self.key_path):
+                self._entries = []
+                return
+            payload = json.loads(payload_bytes.decode("utf-8"))
             if not isinstance(payload, list):
                 raise ValueError("immune memory must be a list")
 
@@ -70,8 +100,6 @@ class ImmuneMemory:
                     )
                 )
         except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
-            # Corrupted or manually altered memory must fail closed: do not
-            # reuse an entry whose structure cannot be trusted.
             self._entries = []
             return
 
