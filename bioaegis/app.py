@@ -6,33 +6,59 @@ import os
 import platform
 import threading
 import time
+import urllib.error
+import urllib.request
 import webbrowser
 
 from .dashboard import serve
 
 
-def _start_browser_fallback(url: str, thread: threading.Thread, reason: str | None = None) -> None:
-    """Open the local console in the default browser and keep the server alive."""
+def _dashboard_ready(url: str) -> bool:
+    try:
+        with urllib.request.urlopen(f"{url}/api/health", timeout=0.35) as response:
+            return response.status == 200
+    except (OSError, urllib.error.URLError, urllib.error.HTTPError):
+        return False
+
+
+def _start_dashboard(host: str, port: int) -> tuple[str, threading.Thread | None]:
+    url = f"http://{host}:{port}"
+    if _dashboard_ready(url):
+        return url, None
+
+    thread = threading.Thread(target=serve, kwargs={"host": host, "port": port}, daemon=True)
+    thread.start()
+    deadline = time.monotonic() + 2.0
+    while time.monotonic() < deadline:
+        if _dashboard_ready(url):
+            return url, thread
+        time.sleep(0.05)
+
+    return url, thread
+
+
+def _start_browser_fallback(url: str, thread: threading.Thread | None, reason: str | None = None) -> None:
+    """Open the local console in the default browser and keep a new server alive."""
     if reason:
         print(f"BIOAEGIS native window unavailable ({reason}); opening browser: {url}")
     else:
         print(f"BIOAEGIS native window unavailable; opening browser: {url}")
     webbrowser.open(url)
-    thread.join()
+    if thread is not None:
+        thread.join()
 
 
 def _configure_linux_qt() -> None:
     """Choose a predictable Qt platform and conservative WebEngine flags."""
-    if os.environ.get("QT_QPA_PLATFORM"):
-        return
-    if os.environ.get("WAYLAND_DISPLAY"):
-        os.environ["QT_QPA_PLATFORM"] = "wayland"
-    elif os.environ.get("DISPLAY"):
-        os.environ["QT_QPA_PLATFORM"] = "xcb"
+    if not os.environ.get("QT_QPA_PLATFORM"):
+        if os.environ.get("WAYLAND_DISPLAY"):
+            os.environ["QT_QPA_PLATFORM"] = "wayland"
+        elif os.environ.get("DISPLAY"):
+            os.environ["QT_QPA_PLATFORM"] = "xcb"
     os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu")
 
 
-def _launch_qt(url: str, thread: threading.Thread) -> None:
+def _launch_qt(url: str, thread: threading.Thread | None) -> None:
     """Run the Linux desktop console directly with PySide6 QtWebEngine."""
     _configure_linux_qt()
     try:
@@ -72,7 +98,7 @@ def _launch_qt(url: str, thread: threading.Thread) -> None:
         _start_browser_fallback(url, thread, f"QtWebEngine startup failed: {exc}")
 
 
-def _launch_pywebview(url: str, thread: threading.Thread) -> None:
+def _launch_pywebview(url: str, thread: threading.Thread | None) -> None:
     """Run the desktop console through pywebview on non-Linux platforms."""
     try:
         import webview  # type: ignore
@@ -95,11 +121,8 @@ def _launch_pywebview(url: str, thread: threading.Thread) -> None:
 
 
 def launch(host: str = "127.0.0.1", port: int = 8765) -> None:
-    """Launch BIOAEGIS as a desktop-style local web application."""
-    thread = threading.Thread(target=serve, kwargs={"host": host, "port": port}, daemon=True)
-    thread.start()
-    url = f"http://{host}:{port}"
-    time.sleep(0.15)
+    """Launch BIOAEGIS without creating duplicate local dashboard servers."""
+    url, thread = _start_dashboard(host, port)
 
     if platform.system() == "Linux":
         _launch_qt(url, thread)
