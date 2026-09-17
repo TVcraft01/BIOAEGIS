@@ -15,7 +15,6 @@ IN_DELETE = 0x00000200
 IN_ATTRIB = 0x00000004
 IN_ISDIR = 0x40000000
 IN_Q_OVERFLOW = 0x00004000
-IN_IGNORED = 0x00008000
 IN_NONBLOCK = os.O_NONBLOCK
 
 
@@ -34,6 +33,7 @@ class InotifyMonitor:
             raise OSError(ctypes.get_errno(), "inotify_init1 failed")
         self._libc = libc
         self._watches: dict[int, Path] = {}
+        self._overflowed = False
         self._add_tree(self.target)
 
     def _add_tree(self, root: Path) -> None:
@@ -50,6 +50,7 @@ class InotifyMonitor:
             self._watches[wd] = path
 
     def poll(self, timeout: float = 0.5) -> list[Path]:
+        self._overflowed = False
         if select.select([self._fd], [], [], timeout)[0] == []:
             return []
         data = os.read(self._fd, 4 * 1024 * 1024)
@@ -63,6 +64,8 @@ class InotifyMonitor:
             end = offset + record_size + name_len
             if end > len(data):
                 break
+            if mask & IN_Q_OVERFLOW:
+                self._overflowed = True
             raw = data[offset + 16:end].split(b"\0", 1)[0]
             base = self._watches.get(wd)
             if base is not None:
@@ -75,8 +78,7 @@ class InotifyMonitor:
 
     @property
     def overflowed(self) -> bool:
-        """The caller can conservatively perform a full sweep after queue loss."""
-        return False
+        return self._overflowed
 
     def close(self) -> None:
         if self._fd >= 0:
