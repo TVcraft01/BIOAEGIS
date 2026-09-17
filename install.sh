@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-INSTALLER_VERSION="2026-09-17.1"
+INSTALLER_VERSION="2026-09-17.2"
 REPO_URL="https://github.com/TVcraft01/BIOAEGIS.git"
 INSTALL_DIR="${BIOAEGIS_HOME:-$HOME/.local/share/bioaegis}"
 BIN_DIR="${BIOAEGIS_BIN:-$HOME/.local/bin}"
 LAUNCHER="$BIN_DIR/bioaegis"
+APP_LAUNCHER="$BIN_DIR/bioaegis-app"
 
 say() { printf '[BIOAEGIS] %s\n' "$1"; }
 fatal() { printf '[BIOAEGIS] ERROR: %s\n' "$1" >&2; exit 1; }
@@ -28,8 +29,9 @@ trap cleanup EXIT
 say "Downloading BIOAEGIS from origin/main"
 git clone --quiet --branch main --single-branch "$REPO_URL" "$TMP_REPO"
 
+[ -f "$TMP_REPO/pyproject.toml" ] || fatal "pyproject.toml is missing from origin/main."
 [ -f "$TMP_REPO/bioaegis/__main__.py" ] || fatal "The downloaded BIOAEGIS package is incomplete."
-[ -f "$TMP_REPO/bioaegis/__init__.py" ] || fatal "The downloaded BIOAEGIS package is incomplete."
+[ -f "$TMP_REPO/bioaegis/app.py" ] || fatal "The desktop launcher is missing from origin/main."
 [ -f "$TMP_REPO/requirements-dev.txt" ] || fatal "requirements-dev.txt is missing from origin/main."
 [ -d "$TMP_REPO/tests" ] || fatal "The BIOAEGIS test suite is missing from origin/main."
 
@@ -51,11 +53,13 @@ rm -rf "$INSTALL_DIR/.venv"
 VENV_PYTHON="$INSTALL_DIR/.venv/bin/python"
 [ -x "$VENV_PYTHON" ] || fatal "Could not create the Python virtual environment."
 
-say "Installing dependencies"
+say "Installing BIOAEGIS package and test dependencies"
+"$VENV_PYTHON" -m pip install --upgrade pip
+"$VENV_PYTHON" -m pip install -e "$INSTALL_DIR"
 "$VENV_PYTHON" -m pip install -r "$INSTALL_DIR/requirements-dev.txt"
 
 say "Verifying BIOAEGIS package"
-PYTHONPATH="$INSTALL_DIR" "$VENV_PYTHON" -c 'import bioaegis; import bioaegis.__main__; print(f"BIOAEGIS {bioaegis.__version__} OK")'
+PYTHONPATH="$INSTALL_DIR" "$VENV_PYTHON" -c 'import bioaegis; import bioaegis.__main__; import bioaegis.app; print(f"BIOAEGIS {bioaegis.__version__} OK")'
 
 say "Running BIOAEGIS self-tests"
 PYTHONPATH="$INSTALL_DIR" "$VENV_PYTHON" -m pytest -q "$INSTALL_DIR/tests"
@@ -69,16 +73,28 @@ exec "$VENV_PYTHON" -m bioaegis "\$@"
 EOF
 chmod +x "$LAUNCHER"
 
+cat > "$APP_LAUNCHER" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+export PYTHONPATH="$INSTALL_DIR\${PYTHONPATH:+:\$PYTHONPATH}"
+cd "$INSTALL_DIR"
+exec "$VENV_PYTHON" -m bioaegis.app "\$@"
+EOF
+chmod +x "$APP_LAUNCHER"
+
 say "Installation complete."
-say "Launcher: $LAUNCHER"
+say "CLI launcher: $LAUNCHER"
+say "Desktop launcher: $APP_LAUNCHER"
 
 case ":${PATH}:" in
     *":$BIN_DIR:"*)
         say "Run: bioaegis"
+        say "Run app: bioaegis-app"
         ;;
     *)
         say "$BIN_DIR is not currently in PATH."
         say "Run directly: $LAUNCHER"
-        say "Or add it to PATH, then run: bioaegis"
+        say "Desktop app directly: $APP_LAUNCHER"
+        say "Or add it to PATH, then run: bioaegis / bioaegis-app"
         ;;
 esac
