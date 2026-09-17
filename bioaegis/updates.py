@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 MANIFEST_URL = "https://raw.githubusercontent.com/TVcraft01/BIOAEGIS/main/updates/manifest.json"
-PUBLIC_KEY_FILE = Path(__file__).resolve().parent.parent / "updates" / "trusted-key.pem"
+PUBLIC_KEY_FILE = Path(__file__).with_name("trusted_update_key.pem")
 MAX_MANIFEST_BYTES = 128 * 1024
 MAX_ARTIFACT_BYTES = 512 * 1024 * 1024
 
@@ -123,7 +123,7 @@ def apply_wheel(wheel: Path, install_root: str | Path) -> None:
         raise FileNotFoundError(python)
     try:
         subprocess.run(
-            [str(python), "-m", "pip", "install", "--upgrade", str(wheel)],
+            [str(python), "-m", "pip", "install", "--upgrade", "--no-input", str(wheel)],
             check=True,
             capture_output=True,
             text=True,
