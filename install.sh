@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-INSTALLER_VERSION="2026-09-17.6"
+INSTALLER_VERSION="2026-09-17.7"
 REPO_URL="https://github.com/TVcraft01/BIOAEGIS.git"
 INSTALL_DIR="${BIOAEGIS_HOME:-$HOME/.local/share/bioaegis}"
 BIN_DIR="${BIOAEGIS_BIN:-$HOME/.local/bin}"
@@ -39,8 +39,16 @@ git clone --quiet --branch main --single-branch "$REPO_URL" "$TMP_REPO"
 [ -f "$TMP_REPO/pyproject.toml" ] || fatal "pyproject.toml is missing from origin/main."
 [ -f "$TMP_REPO/bioaegis/__main__.py" ] || fatal "The downloaded BIOAEGIS package is incomplete."
 [ -f "$TMP_REPO/bioaegis/app.py" ] || fatal "The desktop launcher is missing from origin/main."
+[ -f "$TMP_REPO/bioaegis/protection.py" ] || fatal "The continuous protection engine is missing from origin/main."
 [ -f "$TMP_REPO/requirements-dev.txt" ] || fatal "requirements-dev.txt is missing from origin/main."
 [ -d "$TMP_REPO/tests" ] || fatal "The BIOAEGIS test suite is missing from origin/main."
+[ -f "$TMP_REPO/service/bioaegis-user.service" ] || fatal "The protection service template is missing from origin/main."
+
+# Stop the old service before replacing its code. This prevents it from holding
+# deleted modules open during an upgrade.
+if command -v systemctl >/dev/null 2>&1; then
+    systemctl --user stop bioaegis-user.service >/dev/null 2>&1 || true
+fi
 
 # Never remove the installation while the invoking shell is inside it.
 # Otherwise the shell keeps a deleted cwd and Python/pip can fail with getcwd errors.
@@ -84,7 +92,7 @@ esac
 "$VENV_PYTHON" -m pip install -r "$INSTALL_DIR/requirements-dev.txt"
 
 say "Verifying BIOAEGIS package"
-PYTHONPATH="$INSTALL_DIR" "$VENV_PYTHON" -c 'import bioaegis; import bioaegis.__main__; import bioaegis.app; print(f"BIOAEGIS {bioaegis.__version__} OK")'
+PYTHONPATH="$INSTALL_DIR" "$VENV_PYTHON" -c 'import bioaegis; import bioaegis.__main__; import bioaegis.app; import bioaegis.protection; print(f"BIOAEGIS {bioaegis.__version__} OK")'
 
 say "Running BIOAEGIS self-tests"
 PYTHONPATH="$INSTALL_DIR" "$VENV_PYTHON" -m pytest -q "$INSTALL_DIR/tests"
@@ -107,8 +115,12 @@ exec "$VENV_PYTHON" -m bioaegis.app "\$@"
 EOF
 chmod +x "$APP_LAUNCHER"
 
-# Install the defensive monitor as a user service so protection does not depend on
-# the graphical console staying open.
+# Ensure protected content directories exist so the hardened user service can
+# enter its writable paths without depending on the desktop having created them.
+mkdir -p "$HOME/Downloads" "$HOME/Desktop" "$HOME/Documents"
+
+# Install the defensive monitor as a user service so protection does not depend
+# on the graphical console staying open.
 if command -v systemctl >/dev/null 2>&1; then
     mkdir -p "$SERVICE_DIR"
     cp "$INSTALL_DIR/service/bioaegis-user.service" "$SERVICE_FILE"
@@ -134,7 +146,7 @@ Terminal=false
 Categories=Security;System;
 StartupNotify=true
 EOF
-chmod 644 "$DESKTOP_FILE"
+chmod 0644 "$DESKTOP_FILE"
 
 # Automatically open the graphical console at desktop login.
 mkdir -p "$AUTOSTART_DIR"
@@ -149,14 +161,15 @@ Terminal=false
 X-GNOME-Autostart-enabled=true
 X-KDE-autostart-after=panel
 EOF
-chmod 644 "$AUTOSTART_FILE"
+chmod 0644 "$AUTOSTART_FILE"
 
 say "Installation complete."
-say "BIOAEGIS protection runs in the background and the security console starts automatically at login."
-say "The console is also available from your application menu."
+say "BIOAEGIS protection runs in the background automatically."
+say "The security console is registered in the application menu and desktop login startup."
 
-# Start the console immediately after installation when a graphical session exists.
-if [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
+# Launch the console immediately when a graphical session exists. Future boots
+# use the desktop autostart entry; the protection service is independent of it.
+if [ "${BIOAEGIS_NO_AUTOSTART:-0}" != "1" ] && { [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; }; then
     nohup "$APP_LAUNCHER" >/tmp/bioaegis-app.log 2>&1 &
     say "Security console started"
 fi
