@@ -14,6 +14,7 @@ MANIFEST_NAME = ".integrity-manifest.json"
 SIGNATURE_NAME = ".integrity-manifest.sig"
 CRITICAL_DIRS = ("service", "assets")
 CRITICAL_FILES = ("pyproject.toml",)
+DEFAULT_KEY = Path.home() / ".config" / "bioaegis" / "integrity.key"
 
 
 def manifest_path(root: str | Path) -> Path:
@@ -79,8 +80,13 @@ def _atomic(path: Path, payload: bytes) -> None:
             pass
 
 
+def _key_path(key_path: str | Path | None) -> Path:
+    return Path(key_path or os.environ.get("BIOAEGIS_INTEGRITY_KEY", DEFAULT_KEY))
+
+
 def write_manifest(root: str | Path, key_path: str | Path | None = None) -> Path:
     root_path = Path(root).resolve()
+    key = _key_path(key_path)
     data = {
         "version": 2,
         "files": {
@@ -89,7 +95,6 @@ def write_manifest(root: str | Path, key_path: str | Path | None = None) -> Path
         },
     }
     payload = (json.dumps(data, indent=2, sort_keys=True) + "\n").encode("utf-8")
-    key = Path(key_path or os.environ.get("BIOAEGIS_INTEGRITY_KEY", Path.home() / ".local" / "share" / "bioaegis" / "integrity.key"))
     _atomic(manifest_path(root_path), payload)
     _atomic(signature_path(root_path), (sign(payload, key) + "\n").encode("ascii"))
     return manifest_path(root_path)
@@ -99,7 +104,7 @@ def verify_manifest(root: str | Path, key_path: str | Path | None = None) -> tup
     root_path = Path(root).resolve()
     manifest = manifest_path(root_path)
     signature = signature_path(root_path)
-    key = Path(key_path or os.environ.get("BIOAEGIS_INTEGRITY_KEY", Path.home() / ".local" / "share" / "bioaegis" / "integrity.key"))
+    key = _key_path(key_path)
     try:
         payload = manifest.read_bytes()
         sig = signature.read_text(encoding="ascii").strip()
