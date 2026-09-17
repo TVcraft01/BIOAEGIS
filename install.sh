@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-INSTALLER_VERSION="2026-09-17.5"
+INSTALLER_VERSION="2026-09-17.6"
 REPO_URL="https://github.com/TVcraft01/BIOAEGIS.git"
 INSTALL_DIR="${BIOAEGIS_HOME:-$HOME/.local/share/bioaegis}"
 BIN_DIR="${BIOAEGIS_BIN:-$HOME/.local/bin}"
 LAUNCHER="$BIN_DIR/bioaegis"
 APP_LAUNCHER="$BIN_DIR/bioaegis-app"
+SERVICE_DIR="$HOME/.config/systemd/user"
+SERVICE_FILE="$SERVICE_DIR/bioaegis-user.service"
+APP_DIR="$HOME/.local/share/applications"
+DESKTOP_FILE="$APP_DIR/bioaegis.desktop"
+AUTOSTART_DIR="$HOME/.config/autostart"
+AUTOSTART_FILE="$AUTOSTART_DIR/bioaegis.desktop"
 
 say() { printf '[BIOAEGIS] %s\n' "$1"; }
 fatal() { printf '[BIOAEGIS] ERROR: %s\n' "$1" >&2; exit 1; }
@@ -101,19 +107,56 @@ exec "$VENV_PYTHON" -m bioaegis.app "\$@"
 EOF
 chmod +x "$APP_LAUNCHER"
 
-say "Installation complete."
-say "CLI launcher: $LAUNCHER"
-say "Desktop launcher: $APP_LAUNCHER"
+# Install the defensive monitor as a user service so protection does not depend on
+# the graphical console staying open.
+if command -v systemctl >/dev/null 2>&1; then
+    mkdir -p "$SERVICE_DIR"
+    cp "$INSTALL_DIR/service/bioaegis-user.service" "$SERVICE_FILE"
+    if systemctl --user daemon-reload >/dev/null 2>&1 && systemctl --user enable --now bioaegis-user.service >/dev/null 2>&1; then
+        say "Defensive monitor enabled and started automatically"
+    else
+        say "Systemd is present, but the user monitor could not be started automatically"
+    fi
+else
+    say "systemd user manager not available; background monitor is not auto-enabled"
+fi
 
-case ":${PATH}:" in
-    *":$BIN_DIR:"*)
-        say "Run: bioaegis"
-        say "Run app: bioaegis-app"
-        ;;
-    *)
-        say "$BIN_DIR is not currently in PATH."
-        say "Run directly: $LAUNCHER"
-        say "Desktop app directly: $APP_LAUNCHER"
-        say "Or add it to PATH, then run: bioaegis / bioaegis-app"
-        ;;
-esac
+# Add BIOAEGIS to the desktop application menu.
+mkdir -p "$APP_DIR"
+cat > "$DESKTOP_FILE" <<EOF
+[Desktop Entry]
+Type=Application
+Name=BIOAEGIS Security Console
+Comment=Biologically inspired defensive security console
+Exec=$APP_LAUNCHER
+Icon=security-high
+Terminal=false
+Categories=Security;System;
+StartupNotify=true
+EOF
+chmod 644 "$DESKTOP_FILE"
+
+# Automatically open the graphical console at desktop login.
+mkdir -p "$AUTOSTART_DIR"
+cat > "$AUTOSTART_FILE" <<EOF
+[Desktop Entry]
+Type=Application
+Name=BIOAEGIS Security Console
+Comment=Start BIOAEGIS security console
+Exec=$APP_LAUNCHER
+Icon=security-high
+Terminal=false
+X-GNOME-Autostart-enabled=true
+X-KDE-autostart-after=panel
+EOF
+chmod 644 "$AUTOSTART_FILE"
+
+say "Installation complete."
+say "BIOAEGIS protection runs in the background and the security console starts automatically at login."
+say "The console is also available from your application menu."
+
+# Start the console immediately after installation when a graphical session exists.
+if [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then
+    nohup "$APP_LAUNCHER" >/tmp/bioaegis-app.log 2>&1 &
+    say "Security console started"
+fi
