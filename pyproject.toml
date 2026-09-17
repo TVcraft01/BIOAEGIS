@@ -38,7 +38,12 @@ include-package-data = true
 include = ["bioaegis*"]
 
 [tool.setuptools.package-data]
-bioaegis = ["dashboard_static/*.html", "dashboard_static/*.css", "dashboard_static/*.js"]
+bioaegis = [
+  "dashboard_static/*.html",
+  "dashboard_static/*.css",
+  "dashboard_static/*.js",
+  "trusted_update_key.pem",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
