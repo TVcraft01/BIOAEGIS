@@ -1,1 +1,2 @@
 pytest>=8,<9
+cryptography>=43,<50
