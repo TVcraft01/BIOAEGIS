@@ -17,19 +17,28 @@ def _start_browser_fallback(url: str, thread: threading.Thread) -> None:
     thread.join()
 
 
-def launch(host: str = "127.0.0.1", port: int = 8765) -> None:
-    """Launch BIOAEGIS as a desktop-style local web application.
+def _launch_qt(url: str, thread: threading.Thread) -> None:
+    """Run the Linux desktop console directly with PySide6 QtWebEngine."""
+    try:
+        from PySide6.QtCore import QUrl
+        from PySide6.QtWidgets import QApplication
+        from PySide6.QtWebEngineWidgets import QWebEngineView
+    except ImportError:
+        _start_browser_fallback(url, thread)
+        return
 
-    Linux uses pywebview's Qt backend explicitly because pywebview can otherwise
-    probe GTK first. Other platforms keep their normal backend selection. If
-    pywebview or its native backend is unavailable, the local console opens in
-    the system browser instead of terminating with a traceback.
-    """
-    thread = threading.Thread(target=serve, kwargs={"host": host, "port": port}, daemon=True)
-    thread.start()
-    url = f"http://{host}:{port}"
-    time.sleep(0.15)
+    app = QApplication.instance() or QApplication([])
+    window = QWebEngineView()
+    window.setWindowTitle("BIOAEGIS Security Console")
+    window.resize(1440, 920)
+    window.setMinimumSize(1100, 700)
+    window.setUrl(QUrl(url))
+    window.show()
+    app.exec()
 
+
+def _launch_pywebview(url: str, thread: threading.Thread) -> None:
+    """Run the desktop console through pywebview on non-Linux platforms."""
     try:
         import webview  # type: ignore
         from webview.errors import WebViewException  # type: ignore
@@ -45,13 +54,23 @@ def launch(host: str = "127.0.0.1", port: int = 8765) -> None:
             height=920,
             min_size=(1100, 700),
         )
-        gui = "qt" if platform.system() == "Linux" else None
-        if gui is None:
-            webview.start()
-        else:
-            webview.start(gui=gui)
+        webview.start()
     except WebViewException:
         _start_browser_fallback(url, thread)
+
+
+def launch(host: str = "127.0.0.1", port: int = 8765) -> None:
+    """Launch BIOAEGIS as a desktop-style local web application."""
+    thread = threading.Thread(target=serve, kwargs={"host": host, "port": port}, daemon=True)
+    thread.start()
+    url = f"http://{host}:{port}"
+    time.sleep(0.15)
+
+    if platform.system() == "Linux":
+        _launch_qt(url, thread)
+        return
+
+    _launch_pywebview(url, thread)
 
 
 if __name__ == "__main__":
