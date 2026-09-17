@@ -2,7 +2,7 @@
 
 # BIOAEGIS
 
-### Biologically inspired defensive security research
+### Biologically inspired defensive endpoint security research
 
 **Detect → Investigate → Validate → Contain → Remember**
 
@@ -12,221 +12,241 @@
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/Status-Research%20Prototype-orange)](#status)
 
-A defensive research platform exploring an artificial-immune-system approach to host security: suspicious behavior is investigated by a disposable specialist, independently validated, safely contained, and only then remembered.
+A defensive research platform inspired by biological immune systems. BIOAEGIS combines event-driven filesystem observation, deterministic behavioral analysis, disposable investigation, independent response validation, reversible quarantine, integrity checks, and validated defensive memory.
 
 </div>
 
 ---
 
-## Why BIOAEGIS?
-
-Traditional signature-only thinking asks whether a file is known. BIOAEGIS explores a different question:
-
-> **Does this behavior match something the system has learned to defend against?**
-
-The project combines deterministic static analysis, behavioral memory, reversible quarantine, host telemetry, and explicit security boundaries. Untrusted artifacts are data, not instructions.
-
 ## Status
 
-**Current release: `0.6.0`**
+**Current release: `0.7.0`**
 
-BIOAEGIS is an **experimental security research platform**, not a production antivirus or EDR replacement.
+BIOAEGIS is an **experimental defensive security research platform**. It is not a proven replacement for established antivirus or EDR products.
 
-### Implemented research baseline
+The 0.7.0 release focuses on four engineering goals: continuous local protection, stronger behavioral evidence, tamper detection, and a fail-closed signed update path.
+
+### Implemented baseline
 
 | Area | Status | Notes |
 | --- | :---: | --- |
-| Static file analysis | Done | Bounded, non-executing analysis |
-| Normal / deep scanning | Done | Deep mode can use ClamAV when installed |
-| SHA-256 identity | Done | Findings and quarantine verification |
-| Disposable specialist | Done | Deterministic baseline |
-| Independent validator | Done | Explicit response allow-list |
-| Reversible quarantine | Done | Move + verify + restore |
-| Behavioral immune memory | Done | Specificity-aware, fail-closed parsing |
-| Confidence / evidence fusion | Done | Deterministic research baseline |
-| Behavior clustering | Done | Explainable Jaccard baseline |
-| Runtime / persistence / network telemetry | Done | Linux, read-only |
-| Polling + inotify monitoring | Done | Local filesystem observation |
-| Archive inspection | Done | No extraction or execution |
-| Specialist provider API | Done | Narrow extension point |
-| Local integrity primitive | Done | HMAC-based research baseline |
-| Analysis workspace | Done | Non-executing research sandbox |
-| Hardened user service | Done | systemd template |
-| Security dashboard | Done | Local browser console + scan workspace |
-| Desktop launcher | Done | Native window when optional pywebview is installed |
-| Red-team regression lab | Done | Inert fixtures only |
-| EICAR regression | Done | Standard anti-malware test fixture |
+| Bounded static analysis | Done | Non-executing normal/deep scanning |
+| Behavioral evidence fusion | Done | Deterministic confidence levels |
+| Archive inspection | Done | ZIP/JAR/WHEEL/APK/TAR without extraction |
+| Runtime telemetry | Done | Linux `/proc`, read-only |
+| Persistence telemetry | Done | User-level startup locations |
+| Network telemetry | Done | Listener inventory, no remote probing |
+| Inotify event monitoring | Done | Recursive filesystem event source |
+| Continuous protection service | Done | systemd user service + periodic safety sweeps |
+| Automatic containment gate | Done | Automatic quarantine requires HIGH confidence and validated response |
+| Reversible quarantine | Done | Hash-verified isolation and restoration |
+| Immune memory integrity | Done | HMAC signature, fail closed on tampering |
+| Installation integrity | Done | Signed manifest covers active installed package and deployment assets |
+| Desktop console | Done | Native QtWebEngine on Linux |
+| Automatic startup | Done | Background protection + desktop console |
+| Signed update verifier | Done | Ed25519 manifest + SHA-256 artifact verification |
+| Automatic update timer | Done | Runs, but remains fail-closed until a signed release manifest is enabled |
+| Regression suite | Done | Static, lifecycle, telemetry, tamper, archive, EICAR coverage |
+| Independent AV testing | Not yet | Requires external third-party evaluation |
+| External security audit | Not yet | Requires independent assessor |
+
+## What runs automatically
+
+The official installer configures BIOAEGIS as a user-level Linux application rather than a command you must manually activate.
+
+After installation:
+
+```text
+Login
+  ├─ BIOAEGIS protection service starts
+  │    ├─ filesystem events → scan → validate → high-confidence containment
+  │    ├─ periodic safety sweep
+  │    └─ runtime / persistence / network telemetry
+  │
+  └─ BIOAEGIS Security Console starts
+       └─ displays live protection state and history
+```
+
+Closing the graphical console does **not** stop the protection service.
+
+The installer also registers BIOAEGIS in the desktop application menu and schedules the signed-update worker.
 
 ## Architecture
 
 ```text
-                         HOST / LAB
-                            │
-          ┌─────────────────┼─────────────────┐
-          │                 │                 │
-          ▼                 ▼                 ▼
-      FILE SCAN        RUNTIME SCAN      PERSISTENCE
-          │                 │                 │
-          └─────────────────┼─────────────────┘
-                            ▼
-                     EVIDENCE / SIGNALS
-                            │
-                            ▼
-                    GENERAL DETECTOR
-                            │
-                   known / new behavior
-                            │
-                ┌───────────┴───────────┐
-                │                       │
-             known                    unknown
-                │                       │
-                ▼                       ▼
-         IMMUNE MEMORY           DISPOSABLE SPECIALIST
-                                        │
-                                        ▼
-                                  CANDIDATE RESPONSE
-                                        │
-                                        ▼
-                                  INDEPENDENT VALIDATOR
-                                    │             │
-                                  reject        accept
-                                    │             │
-                                    ▼             ▼
-                                NO ACTION      QUARANTINE
-                                                   │
-                                                   ▼
-                                             VERIFY STATE
-                                                   │
-                                                   ▼
-                                            IMMUNE MEMORY
-                                                   │
-                                                   ▼
-                                           FRESH SCANNER
+                   USER WORKSTATION
+                          │
+          ┌───────────────┼────────────────┐
+          │               │                │
+      FILE EVENTS      /proc         PERSISTENCE
+          │               │                │
+          └───────────────┼────────────────┘
+                          ▼
+                  BEHAVIOR / EVIDENCE
+                          │
+                ┌─────────┴─────────┐
+                │                   │
+             ANALYZE             TELEMETRY
+                │                   │
+                └─────────┬─────────┘
+                          ▼
+                 CONFIDENCE FUSION
+                          │
+                 known / unknown rule
+                     │          │
+                     ▼          ▼
+              IMMUNE MEMORY   SPECIALIST
+                                  │
+                                  ▼
+                           CANDIDATE RESPONSE
+                                  │
+                                  ▼
+                           INDEPENDENT VALIDATOR
+                              │           │
+                           reject       accept
+                              │           │
+                              ▼           ▼
+                           NO ACTION   POLICY GATE
+                                          │
+                              HIGH confidence only
+                                          │
+                                          ▼
+                                      QUARANTINE
+                                          │
+                                          ▼
+                                   SHA-256 VERIFY
+                                          │
+                                          ▼
+                                   IMMUNE MEMORY
 ```
 
-For the detailed trust model, see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the trust model, process boundaries, and failure modes.
 
-## Security model
+## Protection model
 
-**Scanners are read-only.** Scanned content is inspected but never executed.
+### Real-time protection
 
-**The specialist is not trusted.** It can propose a predefined response but receives no arbitrary shell authority.
+Linux `inotify` watches protected user directories recursively. File creation, modification, and move events are analyzed immediately, while periodic sweeps provide a second layer if an event queue overflows or an event is missed.
 
-**The validator is independent.** Only actions on the explicit response allow-list can proceed.
+Automatic containment is deliberately stricter than manual scanning: a finding must have **HIGH confidence** and pass the independent validator before automatic quarantine is allowed.
 
-**Quarantine is reversible.** Files are moved into controlled storage with SHA-256 verification before and after restoration.
+### Behavioral detection
 
-**Memory stores validated defenses.** Disposable investigators are not persisted as authority.
+The static engine now combines multiple indicators instead of treating every indicator as equivalent. Current signals include:
 
-**Invalid state fails closed.** Malformed memory or unsupported responses do not become autonomous actions.
+- download-to-shell and download-to-evaluation patterns;
+- shell/interpreter command execution patterns;
+- simple obfuscation and base64 decoding indicators;
+- reverse-shell indicators;
+- destructive commands;
+- suspicious temporary execution;
+- suspicious persistence patterns;
+- archive path traversal, links, oversized members, and suspicious script content;
+- EICAR test signature;
+- optional ClamAV findings in deep scans.
 
-## Dashboard
+A behavioral signal is **evidence, not proof of malware**.
 
-BIOAEGIS includes a local security console designed for a defensive workstation or research lab.
+### Tamper resistance
 
-### Browser mode
+BIOAEGIS keeps two distinct integrity controls:
 
-```bash
-bioaegis dashboard
-```
+1. **Immune memory integrity** — HMAC-signed memory entries are rejected if they are modified.
+2. **Installation integrity** — a signed local manifest hashes the active installed package plus critical deployment assets. The protection service periodically verifies that manifest and reports `degraded` when integrity is lost.
 
-Open `http://127.0.0.1:8765`.
+These mechanisms provide tamper **detection**. They are not a secure root of trust against a fully privileged attacker who can replace both the application and its trust material.
 
-The console includes animated system status, a detection workspace, immune-memory inspection, quarantine state, host-telemetry overview, and automatic local-state refresh.
+### Secure updates
 
-The HTTP server binds to **loopback by default** and exposes no arbitrary command-execution endpoint.
+BIOAEGIS has a fail-closed update channel:
 
-### Desktop mode
+1. retrieve a small signed release manifest;
+2. verify the Ed25519 signature against the pinned public key;
+3. compare the release version;
+4. download the release artifact with a size limit;
+5. verify its SHA-256 digest;
+6. install the verified package;
+7. rebuild the installation integrity manifest;
+8. restart the protection service after a successful update.
 
-The repository also includes a desktop-style launcher. The official installer creates `bioaegis-app` automatically.
+The automatic update worker is currently **disabled for actual release application until the signing workflow and release key are configured**. An unsigned or malformed manifest results in no update.
 
-```bash
-bioaegis-app
-```
+## Dashboard / application
 
-The launcher uses `pywebview` when available for a native application window; otherwise it opens the same console in the system browser.
+The security console is local and loopback-only by default.
 
-For a manual development install with native-window support:
+The official Linux installer registers:
 
-```bash
-cd /path/to/BIOAEGIS
-python -m pip install -e '.[desktop]'
-bioaegis-app
-```
+- `BIOAEGIS Security Console` in the application menu;
+- desktop-login autostart;
+- a native QtWebEngine window;
+- background protection independent from the GUI.
 
-### Fresh installation
+The console shows protection state, validated memory, quarantine records, scan results, and local telemetry.
 
-From any directory, the installer clones the current `main` branch, creates an isolated virtual environment, installs the package, runs the test suite, and creates both `bioaegis` and `bioaegis-app` launchers:
+## Install once
+
+From any directory:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/TVcraft01/BIOAEGIS/main/install.sh | bash
 ```
 
-## Detection capabilities
+After installation, BIOAEGIS is configured to start itself. No manual activation command is required.
 
-### Static analysis
-
-Normal mode performs bounded analysis of executables, known text/script formats, and files that cheaply sniff as text. Deep mode expands coverage and can invoke recursive ClamAV scanning when available.
-
-Current indicators include download-to-shell, download-to-evaluation, base64 payload patterns, reverse-shell indicators, destructive-command indicators, and the EICAR test signature.
-
-A detection signal is **evidence, not proof of malware**.
-
-### Behavioral immune memory
-
-Validated responses are associated with behavioral triggers rather than only exact file hashes. Matching prefers the most specific available trigger. Malformed memory data is rejected instead of trusted.
-
-### Host telemetry
-
-BIOAEGIS can inspect Linux process command lines through `/proc`, common user persistence locations, listening TCP/UDP sockets, and filesystem changes through polling and inotify.
-
-The telemetry components do not kill processes, execute command lines, probe remote hosts, or close sockets.
-
-### Safe archive inspection
-
-Common ZIP/JAR/WHEEL/APK and TAR-family containers can be inspected without extraction or execution for conditions such as path traversal, dangerous links, oversized members, and simple suspicious script content.
+For development installations, install the package directly with pip instead.
 
 ## CLI
 
-```bash
-python -m pip install -e .
+The CLI remains available for development and explicit analysis:
 
+```bash
 bioaegis --version
-bioaegis dashboard
 bioaegis scan ~/Downloads
 bioaegis scan ~/Downloads --deep
 bioaegis scan ~/Downloads --quarantine
 bioaegis audit ~/Downloads
-bioaegis monitor ~/Downloads --interval 2
-bioaegis quarantine list
-bioaegis quarantine restore <quarantine-file>
 bioaegis redteam
 bioaegis test
 ```
 
-Quarantine is deliberately opt-in. Detection-only scanning is the default.
+Continuous protection is normally managed by the installed user service rather than by manually launching `bioaegis protect`.
 
-## Red-team lab
+## Validation and evidence
 
-```bash
-bioaegis redteam
-```
+BIOAEGIS deliberately separates **implemented controls** from **evidence that those controls work against real malware**.
 
-The suite contains inert regression cases for shell indicators, multiline/evasion patterns, behavior-memory reuse, and EICAR.
+The repository contains:
 
-**Nothing in the repository's red-team fixtures is executed.**
+- deterministic unit and integration tests;
+- EICAR regression coverage;
+- inert red-team fixtures;
+- installation-tamper regression tests;
+- update-signature verification logic;
+- a benchmark harness for measuring detection, false positives, and runtime overhead.
+
+The repository does **not** currently claim:
+
+- an independently measured malware detection rate;
+- a measured zero-day detection rate;
+- a validated false-positive rate on a representative corpus;
+- professional-antivirus-level CPU, RAM, or I/O performance;
+- an external security audit.
+
+Those require controlled datasets, reproducible methodology, independent reviewers, and published results. See [`docs/VALIDATION.md`](docs/VALIDATION.md).
 
 ## Development
 
-### Requirements
+Requirements:
 
 - Linux
 - Python 3.12+
-- `pytest` for the test suite
+- `pytest` for testing
 - ClamAV is optional
-- `pywebview` is optional for the native dashboard window
+- PySide6/pywebview are installed by the Linux desktop extra
+- `cryptography` is installed by the update-verification extra
 
-### Local verification
+Local checks:
 
 ```bash
 python -m pip install -e .
@@ -236,62 +256,53 @@ python -m pytest -q
 bioaegis redteam
 ```
 
-GitHub Actions runs package installation, source compilation, the full test suite, and CLI smoke tests.
+GitHub Actions runs package installation, source compilation, the full regression suite, and CLI smoke tests.
 
 ## Project layout
 
 ```text
 BIOAEGIS/
-├── bioaegis/                  # Application package
-│   ├── host_scanner.py        # Static host scanning
-│   ├── host_engine.py         # Detection / response lifecycle
-│   ├── host_specialist.py     # Disposable deterministic specialist
-│   ├── validator.py            # Response policy boundary
-│   ├── memory.py               # Persistent immune memory
-│   ├── dashboard.py             # Local web security console
-│   ├── app.py                   # Desktop-style launcher
-│   ├── dashboard_static/       # Dashboard frontend assets
+├── bioaegis/                  # Runtime package
+│   ├── host_scanner.py        # Static + behavioral host analysis
+│   ├── host_engine.py         # Detection / validation / containment lifecycle
+│   ├── protection.py          # Continuous protection service
+│   ├── realtime.py             # Linux inotify source
 │   ├── confidence.py           # Evidence fusion
-│   ├── behavior.py             # Behavior similarity / clustering
-│   ├── archive_scanner.py      # Safe archive inspection
-│   ├── integrity.py            # Local integrity primitive
-│   ├── specialist_api.py       # Specialist provider interface
-│   ├── sandbox.py               # Non-executing analysis workspace
-│   ├── realtime.py              # Linux inotify event source
-│   ├── quarantine.py            # Reversible containment
-│   ├── runtime_scanner.py       # Process telemetry
+│   ├── runtime_scanner.py      # Process telemetry
 │   ├── persistence_scanner.py  # Persistence telemetry
-│   ├── network_scanner.py       # Listener inventory
-│   ├── monitor.py               # Polling monitor
-│   ├── audit.py                 # Unified audit
-│   └── redteam.py               # Inert adversarial regression lab
-├── tests/                      # Automated regression coverage
-├── docs/                       # Design and architecture references
-├── service/                    # systemd deployment template
-├── memory/                     # Persistent validated responses
-├── .github/                    # CI and contribution workflow
-├── pyproject.toml              # Package metadata and tooling
-├── install.sh                  # User-local bootstrap installer
-├── requirements-dev.txt        # Development dependencies
-├── SECURITY.md                 # Security reporting policy
-├── CONTRIBUTING.md             # Contribution guide
-├── CODE_OF_CONDUCT.md          # Community standards
-└── LICENSE                     # MIT license
+│   ├── network_scanner.py      # Listener inventory
+│   ├── archive_scanner.py      # Safe container inspection
+│   ├── memory.py               # Signed immune memory
+│   ├── tamper.py               # Installation integrity manifest
+│   ├── updates.py              # Signed update verification
+│   ├── dashboard.py            # Local dashboard server
+│   ├── app.py                  # Native desktop launcher
+│   └── dashboard_static/       # Frontend assets
+├── tests/                      # Regression tests
+├── benchmarks/                 # Measurement harnesses
+├── docs/                       # Architecture + validation docs
+├── service/                    # systemd service/timer units
+├── updates/                    # Release manifest + public trust anchor
+├── install.sh                  # User-local installer
+├── pyproject.toml              # Package metadata
+└── SECURITY.md                 # Security reporting policy
 ```
 
 ## Roadmap
 
-The core research baseline is implemented. The next stage is about turning that baseline into a genuinely production-grade platform rather than adding more surface area prematurely.
+The next stage is evidence and hardening rather than marketing claims:
 
-- [ ] Privilege-separated service with authenticated IPC
-- [ ] Stronger policy signing / external trust anchors
-- [ ] Kernel-level telemetry and prevention research
-- [ ] Complete memory-forensics pipeline
-- [ ] Real detonation sandbox with verified isolation
-- [ ] Mature local ML components with adversarial evaluation
-- [ ] Larger archive/container coverage
-- [ ] Continuous adversarial benchmark corpus
-- [ ] Packaging and release automation
+- [ ] independent malware-detection evaluation;
+- [ ] large benign corpus false-positive study;
+- [ ] CPU / RAM / disk / latency benchmarks on representative hardware;
+- [ ] external security review / audit;
+- [ ] privilege-separated service with authenticated IPC;
+- [ ] stronger external trust root for policy and memory;
+- [ ] kernel telemetry / prevention research;
+- [ ] complete memory-forensics pipeline;
+- [ ] real isolated malware detonation lab;
+- [ ] mature adversarial ML evaluation;
+- [ ] public reproducible benchmark reports.
 
 ## Limitations
 
@@ -302,14 +313,17 @@ BIOAEGIS does **not** claim:
 - kernel-level prevention;
 - complete memory forensics;
 - production-grade malware detonation isolation;
-- protection against a fully privileged local attacker.
+- immunity to a fully privileged local attacker;
+- professional-antivirus equivalence without independent evidence.
 
 ## Documentation
 
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — trust model and data flow
-- [`CONTRIBUTING.md`](CONTRIBUTING.md) — development and contribution workflow
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — system and trust architecture
+- [`docs/VALIDATION.md`](docs/VALIDATION.md) — measurement methodology and current evidence
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — contribution workflow
 - [`SECURITY.md`](SECURITY.md) — vulnerability reporting
-- [`service/bioaegis-user.service`](service/bioaegis-user.service) — hardened user-service template
+- [`service/bioaegis-user.service`](service/bioaegis-user.service) — protection service
+- [`service/bioaegis-update.timer`](service/bioaegis-update.timer) — signed update schedule
 
 ## License
 
