@@ -22,7 +22,7 @@ TEXT_LIKELIHOOD_MIN = 0.85
 EICAR_TEST_SIGNATURE = b"X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
 
 SUSPICIOUS_PATTERNS = (
-    ("download-and-execute", re.compile(rb"(?:curl|wget)[^\n]{0,300}(?:\||;)[^\n]{0,100}(?:sh|bash)")),
+    ("download-and-execute", re.compile(rb"(?:curl|wget)[^\r\n]{0,300}(?:\\[ \t]*(?:\r?\n)[ \t]*)?(?:\||;)[^\r\n]{0,100}(?:sh|bash)")),
     ("download-eval", re.compile(rb"(?:eval|source|exec)[ \t\r\n]*(?:[\"']?\$\([ \t\r\n]*)?(?:curl|wget)[^\n]{0,300}\)?")),
     ("script-interpreter-command", re.compile(rb"(?:^|[;&|])[ \t]*(?:python3?|perl|ruby|node|php|bash|sh|zsh)[ \t]+(?:-c|--eval|-e)[ \t]")),
     ("obfuscated-command", re.compile(rb"(?:printf|echo)[^\n]{0,200}(?:base64|\\x[0-9a-f]{2})[^\n]{0,200}(?:bash|sh|python)")),
