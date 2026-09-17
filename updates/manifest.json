@@ -1,0 +1,7 @@
+{
+  "enabled": false,
+  "version": "0.6.0",
+  "artifact_url": "",
+  "sha256": "",
+  "notes": "Signed update channel is intentionally disabled until the release signing workflow is configured."
+}
