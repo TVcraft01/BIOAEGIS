@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-INSTALLER_VERSION="2026-09-17.9"
+INSTALLER_VERSION="2026-09-17.10"
 REPO_URL="https://github.com/TVcraft01/BIOAEGIS.git"
 INSTALL_DIR="${BIOAEGIS_HOME:-$HOME/.local/share/bioaegis}"
 BIN_DIR="${BIOAEGIS_BIN:-$HOME/.local/bin}"
@@ -9,6 +9,8 @@ LAUNCHER="$BIN_DIR/bioaegis"
 APP_LAUNCHER="$BIN_DIR/bioaegis-app"
 SERVICE_DIR="$HOME/.config/systemd/user"
 SERVICE_FILE="$SERVICE_DIR/bioaegis-user.service"
+UPDATE_SERVICE_FILE="$SERVICE_DIR/bioaegis-update.service"
+UPDATE_TIMER_FILE="$SERVICE_DIR/bioaegis-update.timer"
 APP_DIR="$HOME/.local/share/applications"
 DESKTOP_FILE="$APP_DIR/bioaegis.desktop"
 AUTOSTART_DIR="$HOME/.config/autostart"
@@ -41,14 +43,18 @@ git clone --quiet --branch main --single-branch "$REPO_URL" "$TMP_REPO"
 [ -f "$TMP_REPO/bioaegis/app.py" ] || fatal "The desktop launcher is missing from origin/main."
 [ -f "$TMP_REPO/bioaegis/protection.py" ] || fatal "The continuous protection engine is missing from origin/main."
 [ -f "$TMP_REPO/bioaegis/tamper.py" ] || fatal "The installation integrity module is missing from origin/main."
+[ -f "$TMP_REPO/bioaegis/updates.py" ] || fatal "The signed update verifier is missing from origin/main."
 [ -f "$TMP_REPO/requirements-dev.txt" ] || fatal "requirements-dev.txt is missing from origin/main."
 [ -d "$TMP_REPO/tests" ] || fatal "The BIOAEGIS test suite is missing from origin/main."
 [ -f "$TMP_REPO/service/bioaegis-user.service" ] || fatal "The protection service template is missing from origin/main."
+[ -f "$TMP_REPO/service/bioaegis-update.service" ] || fatal "The update service template is missing from origin/main."
+[ -f "$TMP_REPO/service/bioaegis-update.timer" ] || fatal "The update timer template is missing from origin/main."
 
-# Stop the old service before replacing its code. This prevents it from holding
+# Stop old workers before replacing their code. This prevents them from holding
 # deleted modules open during an upgrade.
 if command -v systemctl >/dev/null 2>&1; then
     systemctl --user stop bioaegis-user.service >/dev/null 2>&1 || true
+    systemctl --user stop bioaegis-update.timer >/dev/null 2>&1 || true
 fi
 
 # Never remove the installation while the invoking shell is inside it.
@@ -121,20 +127,28 @@ chmod +x "$APP_LAUNCHER"
 
 # Ensure protected content directories exist so the hardened user service can
 # enter its writable paths without depending on the desktop having created them.
-mkdir -p "$HOME/Downloads" "$HOME/Desktop" "$HOME/Documents"
+mkdir -p "$HOME/Downloads" "$HOME/Desktop" "$HOME/Documents" "$HOME/.cache/bioaegis"
 
-# Install the defensive monitor as a user service so protection does not depend
-# on the graphical console staying open.
+# Install the defensive monitor and signed update timer as user services.
 if command -v systemctl >/dev/null 2>&1; then
     mkdir -p "$SERVICE_DIR"
     cp "$INSTALL_DIR/service/bioaegis-user.service" "$SERVICE_FILE"
-    if systemctl --user daemon-reload >/dev/null 2>&1 && systemctl --user enable --now bioaegis-user.service >/dev/null 2>&1; then
-        say "Defensive monitor enabled and started automatically"
-    else
-        say "Systemd is present, but the user monitor could not be started automatically"
+    cp "$INSTALL_DIR/service/bioaegis-update.service" "$UPDATE_SERVICE_FILE"
+    cp "$INSTALL_DIR/service/bioaegis-update.timer" "$UPDATE_TIMER_FILE"
+    if systemctl --user daemon-reload >/dev/null 2>&1; then
+        if systemctl --user enable --now bioaegis-user.service >/dev/null 2>&1; then
+            say "Defensive monitor enabled and started automatically"
+        else
+            say "User protection service could not be started automatically"
+        fi
+        if systemctl --user enable --now bioaegis-update.timer >/dev/null 2>&1; then
+            say "Signed update checks scheduled automatically"
+        else
+            say "Signed update timer could not be enabled automatically"
+        fi
     fi
 else
-    say "systemd user manager not available; background monitor is not auto-enabled"
+    say "systemd user manager not available; background services are not auto-enabled"
 fi
 
 # Add BIOAEGIS to the desktop application menu.
