@@ -23,7 +23,8 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-desktop = ["pywebview>=5,<7"]
+desktop = ["pywebview>=6,<7"]
+desktop-qt = ["pywebview[pyside6]>=6,<7"]
 
 [project.scripts]
 bioaegis = "bioaegis.__main__:main"
