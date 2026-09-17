@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-INSTALLER_VERSION="2026-09-17.2"
+INSTALLER_VERSION="2026-09-17.3"
 REPO_URL="https://github.com/TVcraft01/BIOAEGIS.git"
 INSTALL_DIR="${BIOAEGIS_HOME:-$HOME/.local/share/bioaegis}"
 BIN_DIR="${BIOAEGIS_BIN:-$HOME/.local/bin}"
@@ -14,6 +14,7 @@ fatal() { printf '[BIOAEGIS] ERROR: %s\n' "$1" >&2; exit 1; }
 command -v git >/dev/null 2>&1 || fatal "git is required. Install it with your distribution package manager."
 command -v python3 >/dev/null 2>&1 || fatal "python3 is required. Install it with your distribution package manager."
 command -v mktemp >/dev/null 2>&1 || fatal "mktemp is required."
+command -v uname >/dev/null 2>&1 || fatal "uname is required."
 
 PYTHON="$(command -v python3)"
 
@@ -53,9 +54,17 @@ rm -rf "$INSTALL_DIR/.venv"
 VENV_PYTHON="$INSTALL_DIR/.venv/bin/python"
 [ -x "$VENV_PYTHON" ] || fatal "Could not create the Python virtual environment."
 
-say "Installing BIOAEGIS package and test dependencies"
+say "Installing BIOAEGIS package, desktop runtime, and test dependencies"
 "$VENV_PYTHON" -m pip install --upgrade pip
-"$VENV_PYTHON" -m pip install -e "$INSTALL_DIR"
+case "$(uname -s)" in
+    Linux)
+        say "Linux detected — installing Qt/PySide6 native desktop backend"
+        "$VENV_PYTHON" -m pip install -e "${INSTALL_DIR}[desktop-qt]"
+        ;;
+    *)
+        "$VENV_PYTHON" -m pip install -e "${INSTALL_DIR}[desktop]"
+        ;;
+esac
 "$VENV_PYTHON" -m pip install -r "$INSTALL_DIR/requirements-dev.txt"
 
 say "Verifying BIOAEGIS package"
