@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import platform
 import threading
 import time
 import webbrowser
@@ -19,8 +20,9 @@ def _start_browser_fallback(url: str, thread: threading.Thread) -> None:
 def launch(host: str = "127.0.0.1", port: int = 8765) -> None:
     """Launch BIOAEGIS as a desktop-style local web application.
 
-    pywebview provides a native window when a supported GUI backend is available.
-    If pywebview or its native backend is unavailable, the local console opens in
+    Linux uses pywebview's Qt backend explicitly because pywebview can otherwise
+    probe GTK first. Other platforms keep their normal backend selection. If
+    pywebview or its native backend is unavailable, the local console opens in
     the system browser instead of terminating with a traceback.
     """
     thread = threading.Thread(target=serve, kwargs={"host": host, "port": port}, daemon=True)
@@ -43,7 +45,11 @@ def launch(host: str = "127.0.0.1", port: int = 8765) -> None:
             height=920,
             min_size=(1100, 700),
         )
-        webview.start()
+        gui = "qt" if platform.system() == "Linux" else None
+        if gui is None:
+            webview.start()
+        else:
+            webview.start(gui=gui)
     except WebViewException:
         _start_browser_fallback(url, thread)
 
