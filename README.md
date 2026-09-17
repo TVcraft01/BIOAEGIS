@@ -124,33 +124,43 @@ For the detailed trust model, see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
 BIOAEGIS includes a local security console designed for a defensive workstation or research lab.
 
+### Browser mode
+
 ```bash
 bioaegis dashboard
 ```
 
 Open `http://127.0.0.1:8765`.
 
-The console includes:
-
-- animated system overview and protection state;
-- detection workspace with deep-scan and quarantine options;
-- immune-memory inspection;
-- quarantine and SHA-256 state;
-- host-telemetry overview;
-- automatic local-state refresh.
+The console includes animated system status, a detection workspace, immune-memory inspection, quarantine state, host-telemetry overview, and automatic local-state refresh.
 
 The HTTP server binds to **loopback by default** and exposes no arbitrary command-execution endpoint.
 
 ### Desktop mode
 
-For a native application window, install the optional desktop dependency:
+The repository also includes a desktop-style launcher. The official installer creates `bioaegis-app` automatically.
 
 ```bash
+bioaegis-app
+```
+
+The launcher uses `pywebview` when available for a native application window; otherwise it opens the same console in the system browser.
+
+For a manual development install with native-window support:
+
+```bash
+cd /path/to/BIOAEGIS
 python -m pip install -e '.[desktop]'
 bioaegis-app
 ```
 
-Without `pywebview`, `bioaegis-app` falls back to the system browser.
+### Fresh installation
+
+From any directory, the installer clones the current `main` branch, creates an isolated virtual environment, installs the package, runs the test suite, and creates both `bioaegis` and `bioaegis-app` launchers:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/TVcraft01/BIOAEGIS/main/install.sh | bash
+```
 
 ## Detection capabilities
 
