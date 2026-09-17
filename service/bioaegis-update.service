@@ -1,0 +1,24 @@
+[Unit]
+Description=BIOAEGIS signed update worker
+After=default.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/.local/share/bioaegis
+Environment=PIP_DISABLE_PIP_VERSION_CHECK=1
+ExecStart=%h/.local/bin/bioaegis update --apply
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectHostname=true
+ProtectClock=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=%h/.local/share/bioaegis %h/.cache/bioaegis
+UMask=0077
