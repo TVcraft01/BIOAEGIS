@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -15,7 +16,6 @@ from .monitor import Monitor
 from .protection import run_protection
 from .quarantine import Quarantine
 from .redteam import run as redteam_run
-from .tamper import write_manifest
 from .test_runner import run as test_run
 from .tui import run
 
@@ -102,9 +102,26 @@ def _update_command(apply_update: bool) -> int:
     root = Path(os.environ.get("BIOAEGIS_HOME", Path.cwd())).resolve()
     if not (root / "pyproject.toml").is_file():
         raise RuntimeError(f"BIOAEGIS installation root not found: {root}")
+
     wheel = download_and_verify(update)
     apply_wheel(wheel, root)
+
+    # The wheel changes the active venv package. Rebuild the install manifest and
+    # restart the protection worker so long-lived service processes load the new code.
+    from .tamper import write_manifest
+
     write_manifest(root)
+    try:
+        subprocess.run(
+            ["systemctl", "--user", "restart", "bioaegis-user.service"],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError):
+        pass
+
     print(f"BIOAEGIS updated to {update.version}.")
     return 0
 
