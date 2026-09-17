@@ -12,7 +12,7 @@ from .integrity import sign, verify
 
 MANIFEST_NAME = ".integrity-manifest.json"
 SIGNATURE_NAME = ".integrity-manifest.sig"
-CRITICAL_DIRS = ("service", "assets")
+CRITICAL_DIRS = ("bioaegis", "service", "assets")
 CRITICAL_FILES = ("pyproject.toml",)
 DEFAULT_KEY = Path.home() / ".config" / "bioaegis" / "integrity.key"
 
