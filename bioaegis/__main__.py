@@ -10,6 +10,7 @@ from .audit import Auditor
 from .dashboard import serve as dashboard_serve
 from .host_engine import HostEngine
 from .monitor import Monitor
+from .protection import run_protection
 from .quarantine import Quarantine
 from .redteam import run as redteam_run
 from .test_runner import run as test_run
@@ -31,7 +32,7 @@ def _scan_command(target: str, quarantine: bool, deep: bool) -> int:
         print("No suspicious findings.")
         return 0
     for result in results:
-        print(f"[{result.finding.score:02d}] {result.finding.path}")
+        print(f"[{result.finding.score:02d}] {result.confidence_level} {result.finding.path}")
         print(f"     SHA-256: {result.finding.sha256}")
         print(f"     Signals: {', '.join(sorted(result.finding.behaviors))}")
         if result.finding.evidence:
@@ -122,12 +123,17 @@ def main() -> None:
     audit.add_argument("target")
     audit.add_argument("--deep", action="store_true")
 
-    monitor = subparsers.add_parser("monitor", help="Continuously watch defensive telemetry")
+    monitor = subparsers.add_parser("monitor", help="Continuously poll defensive telemetry")
     monitor.add_argument("target")
     monitor.add_argument("--interval", type=float, default=5.0)
     monitor.add_argument("--quarantine", action="store_true")
     monitor.add_argument("--deep", action="store_true")
     monitor.add_argument("--once", action="store_true")
+
+    protect = subparsers.add_parser("protect", help="Run continuous event-driven endpoint protection")
+    protect.add_argument("--sweep-interval", type=float, default=60.0)
+    protect.add_argument("--telemetry-interval", type=float, default=5.0)
+    protect.add_argument("--deep", action="store_true")
 
     dashboard = subparsers.add_parser("dashboard", help="Open the local BIOAEGIS security console")
     dashboard.add_argument("--host", default="127.0.0.1", help="Bind address (default: loopback only)")
@@ -149,6 +155,14 @@ def main() -> None:
         raise SystemExit(_audit_command(args.target, args.deep))
     if args.command == "monitor":
         raise SystemExit(_monitor_command(args.target, args.interval, args.quarantine, args.deep, args.once))
+    if args.command == "protect":
+        raise SystemExit(
+            run_protection(
+                sweep_interval=args.sweep_interval,
+                telemetry_interval=args.telemetry_interval,
+                deep=args.deep,
+            )
+        )
     if args.command == "dashboard":
         dashboard_serve(host=args.host, port=args.port)
         return
