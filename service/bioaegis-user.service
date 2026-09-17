@@ -1,19 +1,28 @@
 [Unit]
-Description=BIOAEGIS defensive monitor (user service)
+Description=BIOAEGIS continuous defensive protection
 After=default.target
 
 [Service]
 Type=simple
-ExecStart=%h/.local/bin/bioaegis monitor %h/Downloads --interval 2
-Restart=on-failure
+WorkingDirectory=%h/.local/share/bioaegis
+ExecStart=%h/.local/bin/bioaegis protect --sweep-interval 60 --telemetry-interval 5
+Restart=always
+RestartSec=2s
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=%h/.local/share/bioaegis
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectHostname=true
+ProtectClock=true
 RestrictSUIDSGID=true
 LockPersonality=true
 MemoryDenyWriteExecute=true
+RestrictAddressFamilies=AF_UNIX
+UMask=0077
+ReadWritePaths=%h/.local/share/bioaegis %h/Downloads %h/Desktop %h/Documents
 
 [Install]
 WantedBy=default.target
