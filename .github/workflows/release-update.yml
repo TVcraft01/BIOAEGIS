@@ -1,0 +1,142 @@
+name: Release and signed update manifest
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build and signing tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build cryptography
+
+      - name: Validate runtime version matches tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          python - <<'PY'
+          import os
+          import pathlib
+          import re
+          import sys
+
+          tag = os.environ["TAG"].removeprefix("v")
+          text = pathlib.Path("bioaegis/__init__.py").read_text(encoding="utf-8")
+          match = re.search(r'__version__\s*=\s*["\']([^"\']+)', text)
+          if not match or match.group(1) != tag:
+              print(f"runtime version={match.group(1) if match else None!r}, tag={tag!r}")
+              sys.exit(1)
+          PY
+
+      - name: Build wheel
+        run: python -m build --wheel
+
+      - name: Verify wheel metadata
+        run: |
+          python - <<'PY'
+          import glob
+          import zipfile
+
+          wheels = glob.glob("dist/*.whl")
+          if len(wheels) != 1:
+              raise SystemExit(f"expected exactly one wheel, found {wheels}")
+          with zipfile.ZipFile(wheels[0]) as archive:
+              names = set(archive.namelist())
+              if not any(name.endswith("bioaegis/trusted_update_key.pem") for name in names):
+                  raise SystemExit("wheel does not contain the pinned update trust anchor")
+          print(wheels[0])
+          PY
+
+      - name: Verify release signing key matches repository trust anchor
+        env:
+          BIOAEGIS_UPDATE_PRIVATE_KEY: ${{ secrets.BIOAEGIS_UPDATE_PRIVATE_KEY }}
+        run: |
+          test -n "$BIOAEGIS_UPDATE_PRIVATE_KEY" || { echo "BIOAEGIS_UPDATE_PRIVATE_KEY secret is required"; exit 1; }
+          python - <<'PY'
+          import os
+          from cryptography.hazmat.primitives import serialization
+
+          private_key = serialization.load_pem_private_key(
+              os.environ["BIOAEGIS_UPDATE_PRIVATE_KEY"].encode(), password=None
+          )
+          derived = private_key.public_key().public_bytes(
+              serialization.Encoding.PEM,
+              serialization.PublicFormat.SubjectPublicKeyInfo,
+          )
+          expected = open("bioaegis/trusted_update_key.pem", "rb").read()
+          if derived != expected:
+              raise SystemExit("release private key does not match bioaegis/trusted_update_key.pem")
+          PY
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" dist/*.whl \
+            --title "BIOAEGIS ${{ github.ref_name }}" \
+            --generate-notes
+
+      - name: Sign and publish update manifest
+        env:
+          BIOAEGIS_UPDATE_PRIVATE_KEY: ${{ secrets.BIOAEGIS_UPDATE_PRIVATE_KEY }}
+          TAG: ${{ github.ref_name }}
+          REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          python - <<'PY'
+          import base64
+          import glob
+          import hashlib
+          import json
+          import os
+          import pathlib
+          import subprocess
+
+          from cryptography.hazmat.primitives import serialization
+
+          tag = os.environ["TAG"]
+          version = tag.removeprefix("v")
+          repository = os.environ["REPOSITORY"]
+          wheel = pathlib.Path(glob.glob("dist/*.whl")[0])
+          digest = hashlib.sha256(wheel.read_bytes()).hexdigest()
+          artifact_url = f"https://github.com/{repository}/releases/download/{tag}/{wheel.name}"
+          manifest = {
+              "enabled": True,
+              "version": version,
+              "artifact_url": artifact_url,
+              "sha256": digest,
+              "notes": f"Signed BIOAEGIS {version} release.",
+          }
+          canonical = (json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n").encode()
+          private_key = serialization.load_pem_private_key(
+              os.environ["BIOAEGIS_UPDATE_PRIVATE_KEY"].encode(), password=None
+          )
+          manifest["signature"] = base64.b64encode(private_key.sign(canonical)).decode("ascii")
+          pathlib.Path("updates/manifest.json").write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Commit signed manifest to main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add updates/manifest.json
+          git commit -m "release: publish signed update manifest ${{ github.ref_name }}"
+          git push origin HEAD:main
