@@ -10,9 +10,12 @@ import webbrowser
 from .dashboard import serve
 
 
-def _start_browser_fallback(url: str, thread: threading.Thread) -> None:
+def _start_browser_fallback(url: str, thread: threading.Thread, reason: str | None = None) -> None:
     """Open the local console in the default browser and keep the server alive."""
-    print(f"BIOAEGIS native window unavailable; opening browser: {url}")
+    if reason:
+        print(f"BIOAEGIS native window unavailable ({reason}); opening browser: {url}")
+    else:
+        print(f"BIOAEGIS native window unavailable; opening browser: {url}")
     webbrowser.open(url)
     thread.join()
 
@@ -23,18 +26,34 @@ def _launch_qt(url: str, thread: threading.Thread) -> None:
         from PySide6.QtCore import QUrl
         from PySide6.QtWidgets import QApplication
         from PySide6.QtWebEngineWidgets import QWebEngineView
-    except ImportError:
-        _start_browser_fallback(url, thread)
+    except ImportError as exc:
+        _start_browser_fallback(url, thread, f"QtWebEngine import failed: {exc}")
         return
 
-    app = QApplication.instance() or QApplication([])
-    window = QWebEngineView()
-    window.setWindowTitle("BIOAEGIS Security Console")
-    window.resize(1440, 920)
-    window.setMinimumSize(1100, 700)
-    window.setUrl(QUrl(url))
-    window.show()
-    app.exec()
+    try:
+        app = QApplication.instance() or QApplication([])
+        window = QWebEngineView()
+        window.setWindowTitle("BIOAEGIS Security Console")
+        window.resize(1440, 920)
+        window.setMinimumSize(1100, 700)
+        window.setUrl(QUrl(url))
+        window.show()
+        window.raise_()
+        window.activateWindow()
+
+        print("BIOAEGIS native Qt console started.")
+        started = time.monotonic()
+        exit_code = app.exec()
+        runtime = time.monotonic() - started
+
+        if runtime < 0.75:
+            _start_browser_fallback(
+                url,
+                thread,
+                f"Qt event loop exited immediately (code {exit_code})",
+            )
+    except Exception as exc:  # noqa: BLE001
+        _start_browser_fallback(url, thread, f"QtWebEngine startup failed: {exc}")
 
 
 def _launch_pywebview(url: str, thread: threading.Thread) -> None:
@@ -55,8 +74,8 @@ def _launch_pywebview(url: str, thread: threading.Thread) -> None:
             min_size=(1100, 700),
         )
         webview.start()
-    except WebViewException:
-        _start_browser_fallback(url, thread)
+    except WebViewException as exc:
+        _start_browser_fallback(url, thread, str(exc))
 
 
 def launch(host: str = "127.0.0.1", port: int = 8765) -> None:
