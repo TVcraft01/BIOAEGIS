@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
+from pathlib import Path
 
 from . import __version__
 from .audit import Auditor
@@ -13,6 +14,7 @@ from .monitor import Monitor
 from .protection import run_protection
 from .quarantine import Quarantine
 from .redteam import run as redteam_run
+from .tamper import write_manifest
 from .test_runner import run as test_run
 from .tui import run
 
@@ -79,6 +81,31 @@ def _monitor_command(target: str, interval: float, quarantine: bool, deep: bool,
         return 2
 
 
+def _update_command(apply_update: bool) -> int:
+    try:
+        from .updates import apply_wheel, check_for_update, download_and_verify
+    except ImportError:
+        print("Signed update verifier is not installed.")
+        return 2
+
+    update = check_for_update(__version__)
+    if update is None:
+        print("BIOAEGIS update channel: no signed update available.")
+        return 0
+
+    print(f"BIOAEGIS update available: {__version__} -> {update.version}")
+    if not apply_update:
+        print("Update not applied. The signed release has passed verification.")
+        return 0
+
+    root = Path(__file__).resolve().parents[1]
+    wheel = download_and_verify(update)
+    apply_wheel(wheel, root)
+    write_manifest(root)
+    print(f"BIOAEGIS updated to {update.version}.")
+    return 0
+
+
 def _quarantine_command(action: str, path: str | None) -> int:
     quarantine = Quarantine()
     try:
@@ -135,6 +162,9 @@ def main() -> None:
     protect.add_argument("--telemetry-interval", type=float, default=5.0)
     protect.add_argument("--deep", action="store_true")
 
+    update = subparsers.add_parser("update", help="Check or apply a signed BIOAEGIS release")
+    update.add_argument("--apply", action="store_true", help="Install a verified update")
+
     dashboard = subparsers.add_parser("dashboard", help="Open the local BIOAEGIS security console")
     dashboard.add_argument("--host", default="127.0.0.1", help="Bind address (default: loopback only)")
     dashboard.add_argument("--port", type=int, default=8765, help="HTTP port")
@@ -163,6 +193,8 @@ def main() -> None:
                 deep=args.deep,
             )
         )
+    if args.command == "update":
+        raise SystemExit(_update_command(args.apply))
     if args.command == "dashboard":
         dashboard_serve(host=args.host, port=args.port)
         return
