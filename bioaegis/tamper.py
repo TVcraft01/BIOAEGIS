@@ -12,7 +12,7 @@ from .integrity import sign, verify
 
 MANIFEST_NAME = ".integrity-manifest.json"
 SIGNATURE_NAME = ".integrity-manifest.sig"
-CRITICAL_DIRS = ("bioaegis", "service", "assets")
+CRITICAL_DIRS = ("service", "assets")
 CRITICAL_FILES = ("pyproject.toml",)
 
 
@@ -22,6 +22,14 @@ def manifest_path(root: str | Path) -> Path:
 
 def signature_path(root: str | Path) -> Path:
     return Path(root) / SIGNATURE_NAME
+
+
+def _active_package(root: Path) -> Path | None:
+    site_packages = root / ".venv" / "lib"
+    if not site_packages.is_dir():
+        return None
+    matches = sorted(site_packages.glob("python*/site-packages/bioaegis"))
+    return matches[0] if matches else None
 
 
 def _files(root: Path) -> list[Path]:
@@ -37,6 +45,12 @@ def _files(root: Path) -> list[Path]:
         for path in base.rglob("*"):
             if path.is_file() and not path.is_symlink():
                 paths.append(path)
+
+    package = _active_package(root)
+    if package is not None:
+        for path in package.rglob("*"):
+            if path.is_file() and not path.is_symlink():
+                paths.append(path)
     return sorted(set(paths))
 
 
@@ -49,6 +63,7 @@ def _digest(path: Path) -> str:
 
 
 def _atomic(path: Path, payload: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(prefix=path.name + ".", dir=path.parent)
     try:
         with os.fdopen(fd, "wb") as handle:
@@ -67,7 +82,7 @@ def _atomic(path: Path, payload: bytes) -> None:
 def write_manifest(root: str | Path, key_path: str | Path | None = None) -> Path:
     root_path = Path(root).resolve()
     data = {
-        "version": 1,
+        "version": 2,
         "files": {
             str(path.relative_to(root_path)): _digest(path)
             for path in _files(root_path)
@@ -91,18 +106,22 @@ def verify_manifest(root: str | Path, key_path: str | Path | None = None) -> tup
         if not verify(payload, sig, key):
             return False, ("installation manifest signature mismatch",)
         data = json.loads(payload.decode("utf-8"))
+        if data.get("version") != 2:
+            return False, ("unsupported installation manifest version",)
         expected = data.get("files", {})
         if not isinstance(expected, dict):
             return False, ("invalid installation manifest",)
         issues: list[str] = []
+        current = {str(path.relative_to(root_path)): _digest(path) for path in _files(root_path)}
         for relative, digest in expected.items():
             path = root_path / relative
             if not path.is_file():
                 issues.append(f"missing: {relative}")
                 continue
-            actual = _digest(path)
-            if actual != digest:
+            if current.get(relative) != digest:
                 issues.append(f"modified: {relative}")
-        return not issues, tuple(issues)
+        for relative in current.keys() - expected.keys():
+            issues.append(f"unexpected: {relative}")
+        return not issues, tuple(sorted(issues))
     except (OSError, ValueError, TypeError, json.JSONDecodeError):
         return False, ("installation manifest unavailable or malformed",)
