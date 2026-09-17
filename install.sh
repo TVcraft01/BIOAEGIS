@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-INSTALLER_VERSION="2026-09-17.8"
+INSTALLER_VERSION="2026-09-17.9"
 REPO_URL="https://github.com/TVcraft01/BIOAEGIS.git"
 INSTALL_DIR="${BIOAEGIS_HOME:-$HOME/.local/share/bioaegis}"
 BIN_DIR="${BIOAEGIS_BIN:-$HOME/.local/bin}"
@@ -79,21 +79,21 @@ rm -rf "$INSTALL_DIR/.venv"
 VENV_PYTHON="$INSTALL_DIR/.venv/bin/python"
 [ -x "$VENV_PYTHON" ] || fatal "Could not create the Python virtual environment."
 
-say "Installing BIOAEGIS package, desktop runtime, and test dependencies"
+say "Installing BIOAEGIS package, desktop runtime, update verifier, and test dependencies"
 "$VENV_PYTHON" -m pip install --upgrade pip
 case "$(uname -s)" in
     Linux)
         say "Linux detected — installing Qt/PySide6 native desktop backend"
-        "$VENV_PYTHON" -m pip install -e "${INSTALL_DIR}[desktop-qt]"
+        "$VENV_PYTHON" -m pip install -e "${INSTALL_DIR}[desktop-qt,updates]"
         ;;
     *)
-        "$VENV_PYTHON" -m pip install -e "${INSTALL_DIR}[desktop]"
+        "$VENV_PYTHON" -m pip install -e "${INSTALL_DIR}[desktop,updates]"
         ;;
 esac
 "$VENV_PYTHON" -m pip install -r "$INSTALL_DIR/requirements-dev.txt"
 
 say "Verifying BIOAEGIS package"
-PYTHONPATH="$INSTALL_DIR" "$VENV_PYTHON" -c 'import bioaegis; import bioaegis.__main__; import bioaegis.app; import bioaegis.protection; import bioaegis.tamper; print(f"BIOAEGIS {bioaegis.__version__} OK")'
+PYTHONPATH="$INSTALL_DIR" "$VENV_PYTHON" -c 'import bioaegis; import bioaegis.__main__; import bioaegis.app; import bioaegis.protection; import bioaegis.tamper; import bioaegis.updates; print(f"BIOAEGIS {bioaegis.__version__} OK")'
 
 say "Running BIOAEGIS self-tests"
 PYTHONPATH="$INSTALL_DIR" "$VENV_PYTHON" -m pytest -q "$INSTALL_DIR/tests"
@@ -170,6 +170,7 @@ chmod 0644 "$AUTOSTART_FILE"
 say "Installation complete."
 say "BIOAEGIS protection runs in the background automatically."
 say "The security console is registered in the application menu and desktop login startup."
+say "Signed update verification is installed; automatic updates remain fail-closed until a signed release manifest is published."
 
 # Launch the console immediately when a graphical session exists. Future boots
 # use the desktop autostart entry; the protection service is independent of it.
