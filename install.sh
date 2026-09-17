@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-INSTALLER_VERSION="2026-09-17.7"
+INSTALLER_VERSION="2026-09-17.8"
 REPO_URL="https://github.com/TVcraft01/BIOAEGIS.git"
 INSTALL_DIR="${BIOAEGIS_HOME:-$HOME/.local/share/bioaegis}"
 BIN_DIR="${BIOAEGIS_BIN:-$HOME/.local/bin}"
@@ -40,6 +40,7 @@ git clone --quiet --branch main --single-branch "$REPO_URL" "$TMP_REPO"
 [ -f "$TMP_REPO/bioaegis/__main__.py" ] || fatal "The downloaded BIOAEGIS package is incomplete."
 [ -f "$TMP_REPO/bioaegis/app.py" ] || fatal "The desktop launcher is missing from origin/main."
 [ -f "$TMP_REPO/bioaegis/protection.py" ] || fatal "The continuous protection engine is missing from origin/main."
+[ -f "$TMP_REPO/bioaegis/tamper.py" ] || fatal "The installation integrity module is missing from origin/main."
 [ -f "$TMP_REPO/requirements-dev.txt" ] || fatal "requirements-dev.txt is missing from origin/main."
 [ -d "$TMP_REPO/tests" ] || fatal "The BIOAEGIS test suite is missing from origin/main."
 [ -f "$TMP_REPO/service/bioaegis-user.service" ] || fatal "The protection service template is missing from origin/main."
@@ -92,10 +93,13 @@ esac
 "$VENV_PYTHON" -m pip install -r "$INSTALL_DIR/requirements-dev.txt"
 
 say "Verifying BIOAEGIS package"
-PYTHONPATH="$INSTALL_DIR" "$VENV_PYTHON" -c 'import bioaegis; import bioaegis.__main__; import bioaegis.app; import bioaegis.protection; print(f"BIOAEGIS {bioaegis.__version__} OK")'
+PYTHONPATH="$INSTALL_DIR" "$VENV_PYTHON" -c 'import bioaegis; import bioaegis.__main__; import bioaegis.app; import bioaegis.protection; import bioaegis.tamper; print(f"BIOAEGIS {bioaegis.__version__} OK")'
 
 say "Running BIOAEGIS self-tests"
 PYTHONPATH="$INSTALL_DIR" "$VENV_PYTHON" -m pytest -q "$INSTALL_DIR/tests"
+
+say "Creating installation integrity manifest"
+PYTHONPATH="$INSTALL_DIR" "$VENV_PYTHON" -c 'from bioaegis.tamper import write_manifest; write_manifest("$INSTALL_DIR")'
 
 cat > "$LAUNCHER" <<EOF
 #!/usr/bin/env bash
