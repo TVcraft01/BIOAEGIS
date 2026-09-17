@@ -14,6 +14,7 @@ from .persistence_scanner import PersistenceScanner
 from .realtime import InotifyMonitor
 from .runtime_scanner import RuntimeScanner
 from .status import write_status
+from .tamper import verify_manifest
 
 DEFAULT_EVENT_TIMEOUT = 0.35
 DEFAULT_SWEEP_INTERVAL = 60.0
@@ -76,24 +77,29 @@ class ProtectionService:
         self._stop = False
         self._last_sweep = 0.0
         self._last_telemetry = 0.0
-        self._last_events = 0
         self._findings = 0
         self._quarantined = 0
         self._last_error: str | None = None
+        self._tamper_ok = True
+        self._tamper_issues: tuple[str, ...] = ()
+        self._install_root = Path(__file__).resolve().parents[1]
 
     def stop(self, *_args: object) -> None:
         self._stop = True
 
     def _state(self, running: bool, last_event: str | None = None, **extra: object) -> None:
+        status = "protected" if running and self._tamper_ok else ("degraded" if running else "stopped")
         write_status(
             {
-                "status": "protected" if running else "stopped",
+                "status": status,
                 "running": running,
                 "pid": os.getpid(),
                 "roots": [str(root) for root in self.roots],
                 "findings": self._findings,
                 "quarantined": self._quarantined,
                 "last_error": self._last_error,
+                "tamper_ok": self._tamper_ok,
+                "tamper_issues": list(self._tamper_issues),
                 "last_event": last_event,
                 "last_sweep": datetime.fromtimestamp(self._last_sweep, timezone.utc).isoformat() if self._last_sweep else None,
                 "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -115,10 +121,10 @@ class ProtectionService:
             self._findings += 1
             if result.quarantined:
                 self._quarantined += 1
-            self._last_events += 1
             self._state(True, str(path), last_action=result.message, confidence=result.confidence_level)
 
     def _telemetry_cycle(self) -> None:
+        self._tamper_ok, self._tamper_issues = verify_manifest(self._install_root)
         for item in self.runtime.scan():
             if item.score >= 4:
                 executable = Path(item.executable)
@@ -127,8 +133,6 @@ class ProtectionService:
                         self._findings += 1
                         if result.quarantined:
                             self._quarantined += 1
-        # Persistence and listener scanners remain observation-only. Their
-        # findings are included in health telemetry without autonomous action.
         self.persistence.scan()
         self.network.scan()
 
@@ -144,6 +148,7 @@ class ProtectionService:
         signal.signal(signal.SIGTERM, self.stop)
         signal.signal(signal.SIGINT, self.stop)
         monitors = []
+        self._tamper_ok, self._tamper_issues = verify_manifest(self._install_root)
         self._state(True)
         try:
             for root in self.roots:
@@ -167,6 +172,7 @@ class ProtectionService:
                     except (OSError, ValueError) as exc:
                         self._last_error = str(exc)
                     self._last_telemetry = now
+                    self._state(True)
 
                 if now - self._last_sweep >= self.sweep_interval:
                     try:
