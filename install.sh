@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-INSTALLER_VERSION="2026-09-17.3"
+INSTALLER_VERSION="2026-09-17.4"
 REPO_URL="https://github.com/TVcraft01/BIOAEGIS.git"
 INSTALL_DIR="${BIOAEGIS_HOME:-$HOME/.local/share/bioaegis}"
 BIN_DIR="${BIOAEGIS_BIN:-$HOME/.local/bin}"
@@ -35,6 +35,16 @@ git clone --quiet --branch main --single-branch "$REPO_URL" "$TMP_REPO"
 [ -f "$TMP_REPO/bioaegis/app.py" ] || fatal "The desktop launcher is missing from origin/main."
 [ -f "$TMP_REPO/requirements-dev.txt" ] || fatal "requirements-dev.txt is missing from origin/main."
 [ -d "$TMP_REPO/tests" ] || fatal "The BIOAEGIS test suite is missing from origin/main."
+
+# Never remove the installation while the invoking shell is inside it.
+# Otherwise the shell keeps a deleted cwd and Python/pip can fail with getcwd errors.
+CURRENT_DIR="$(pwd -P)"
+case "$CURRENT_DIR/" in
+    "$INSTALL_DIR"/*)
+        say "Current directory is inside the installation; moving the shell to $HOME before replacement"
+        cd "${HOME:-/}"
+        ;;
+esac
 
 if [ -d "$INSTALL_DIR/.git" ]; then
     say "Existing installation found — replacing it with the verified checkout"
